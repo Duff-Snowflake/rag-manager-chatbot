@@ -8,3 +8,6 @@ langchain
 langchain-community
 python-dotenv
 altair
+pypdf
+openai
+pandas
