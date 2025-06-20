@@ -9,5 +9,6 @@ langchain-community
 python-dotenv
 altair
 pypdf
+PyPDF2
 openai
 pandas
