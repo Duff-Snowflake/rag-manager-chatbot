@@ -4,4 +4,6 @@ pypdf
 faiss-cpu
 openai
 langchain
+langchain-community
 python-dotenv
+altair
