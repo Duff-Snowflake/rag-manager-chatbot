@@ -3,6 +3,7 @@ boto3
 pypdf
 faiss-cpu
 openai
+langchain-openai
 langchain
 langchain-community
 python-dotenv
