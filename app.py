@@ -47,8 +47,8 @@ else:
     access_db = {}
 
 # UI to ask for email
-st.markdown("### 🔐 Access Required")
-email = st.text_input("Enter your email to access the assistant:", value="", max_chars=100)
+st.markdown("### 🔐 Welcome to your new tool for learning to motivate your teams")
+email = st.text_input("Please enter your email to access the assistant:", value="", max_chars=100)
 
 # Check and store access
 ACCESS_DURATION_DAYS = 7
