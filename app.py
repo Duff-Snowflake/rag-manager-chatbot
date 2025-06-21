@@ -76,9 +76,9 @@ else:
     llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
-else:
-    st.warning("Please enter a valid email to continue.")
-    st.stop()
+# else:
+#     st.warning("Please enter a valid email to continue.")
+#     st.stop()
 
 # Inject custom CSS for dark corporate theme
 st.markdown("""
