@@ -28,7 +28,8 @@ def create_faiss_index(chunks):
 
 def load_faiss_index():
     print("📂 Loading FAISS index...")
-    return FAISS.load_local("faiss_index", embedding_model, allow_dangerous_deserialization=True)
+    index_path = os.path.join(os.path.dirname(__file__), "faiss_index")
+    return FAISS.load_local(index_path, embedding_model, allow_dangerous_deserialization=True)
 
 def query_vectorstore(vectorstore, query, k=3):
     print(f"\n🔍 Searching for: '{query}'")
