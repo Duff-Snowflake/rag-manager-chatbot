@@ -6,8 +6,13 @@ import os
 # Email capture
 import json
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
 USER_DB_PATH = "user_access.json"
+EMAIL_DB_PATH = "user_access.json"
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 def load_users():
     if os.path.exists(USER_DB_PATH):
@@ -25,20 +30,6 @@ def is_user_active(email, users):
     start_date = datetime.strptime(users[email], "%Y-%m-%d")
     return datetime.now() <= start_date + timedelta(days=7)
 
-
-from dotenv import load_dotenv
-from datetime import datetime
-
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# 🔒 Basic email capture / gating
-import json
-import os
-from datetime import datetime, timedelta
-
-EMAIL_DB_PATH = "user_access.json"
-
 # Load or create email access record
 if os.path.exists(EMAIL_DB_PATH):
     with open(EMAIL_DB_PATH, "r") as f:
@@ -52,9 +43,11 @@ email = st.text_input("Please enter your email to access the assistant:", value=
 
 UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
 REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
-
-# Check and store access
 ACCESS_DURATION_DAYS = 7
+
+retriever = None
+qa_chain = None
+llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 
 # Case 1: Admin email
 if email == UNRESTRICTED_EMAIL:
@@ -64,19 +57,17 @@ if email == UNRESTRICTED_EMAIL:
         st.stop()
     else:
         st.success("✅ Admin access granted.")
-
-        # Add "View as User" toggle
         view_as_user = st.checkbox("👀 View as regular user")
 
         if view_as_user:
-            # Simulate standard user access
             expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
             st.success(f"🔓 Simulated user access. Trial active until {expiry.date()}")
         else:
-            # Admin-only content goes here
             st.markdown("🛠 You are viewing full admin capabilities.")
-            # Example admin-only features:
             st.markdown("Here you could show debugging tools, metrics, or additional upload options.")
+
+        retriever = load_faiss_index().as_retriever(return_source_documents=True)
+        qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
 # Case 2: Trial access for other users
 elif email:
@@ -91,16 +82,11 @@ elif email:
         st.stop()
     else:
         st.success(f"✅ Access granted. Trial active until {expiry.date()}")
+        retriever = load_faiss_index().as_retriever(return_source_documents=True)
+        qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 else:
     st.warning("⏳ Please enter your email to begin your free trial.")
     st.stop()
-
-    # Load retriever and assistant only if email is allowed
-    retriever = load_faiss_index().as_retriever(return_source_documents=True)
-
-    # Load LLM and QA chain
-    llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
-    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
 # Inject custom CSS for dark corporate theme
 st.markdown("""
@@ -169,10 +155,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Layout
 st.markdown("<div class='main'>", unsafe_allow_html=True)
 
-# Header branding with title inside the box
 st.markdown("""
 <div style="display: flex; align-items: center; margin-bottom: 1rem;">
     <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo" style="height: 50px; margin-right: 10px;">
@@ -196,21 +180,18 @@ if "query" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# Question buttons
 for i, q in enumerate(example_questions):
     if st.button(q, key=f"example_{i}"):
         st.session_state.query = q
 
-# Input box
 user_input = st.text_input("Or enter your question here", value=st.session_state.query, placeholder="e.g., How do I give feedback to an avoidant employee?")
 st.session_state.query = user_input
 
-# History controls
 if st.button("Clear Response History"):
     st.session_state.history = []
 
 show_history = st.checkbox("Show response history")
-# show_sources = st.checkbox("Show source documents")
+
 
 def format_response(base_answer, query):
     prompt = f"""
@@ -229,7 +210,7 @@ Output everything as markdown.
 """
     return llm.invoke(prompt).content
 
-if st.session_state.query:
+if st.session_state.query and qa_chain:
     with st.spinner("Thinking..."):
         result = qa_chain({"query": st.session_state.query})
         base_answer = result["result"]
@@ -242,10 +223,6 @@ if st.session_state.query:
             "sources": result.get("source_documents", [])
         })
     st.markdown(formatted)
-    if show_sources:
-        st.markdown("**Sources:**")
-        for doc in result.get("source_documents", []):
-            st.markdown(f"- {doc.metadata.get('source', 'Unknown')}")
 
 if show_history and st.session_state.history:
     st.markdown("---")
@@ -253,13 +230,12 @@ if show_history and st.session_state.history:
     for entry in st.session_state.history:
         st.markdown(f"**Q ({entry['t']}):** {entry['q']}")
         st.markdown(entry['a'])
-        if show_sources and entry["sources"]:
+        if entry.get("sources"):
             st.markdown("**Sources:**")
             for doc in entry["sources"]:
                 st.markdown(f"- {doc.metadata.get('source', 'Unknown')}")
         st.markdown("---")
 
-# Footer branding
 st.markdown("""
 <div class="footer-logo">
     <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Your Branding Here">
