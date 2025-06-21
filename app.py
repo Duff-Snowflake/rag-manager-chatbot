@@ -100,7 +100,7 @@ for i, q in enumerate(example_questions):
         st.session_state.query = q
 
 # Text input always visible
-user_input = st.text_input("Or enter your question here", value=st.session_state.query, placeholder="e.g., How do I give feedback to an avoidant employee?")
+user_input = st.text_input("Enter your questions here", value=st.session_state.query, placeholder="e.g., How do I give feedback to an avoidant employee?")
 
 # Update query from text input
 st.session_state.query = user_input
@@ -130,3 +130,9 @@ if st.session_state.query:
     st.markdown(formatted)
 
 st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("""
+    <div style='text-align: center; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #4a4a4a;'>
+        <img src='https://via.placeholder.com/150x40.png?text=Your+Logo+Here' alt='Your Brand' style='opacity:0.6;'>
+        <p style='font-size: 0.8rem; color: #ccc;'>© 2025 Your Company Name</p>
+    </div>
+""", unsafe_allow_html=True)
