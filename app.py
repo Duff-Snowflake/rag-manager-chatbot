@@ -83,16 +83,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Header branding with title
+# Layout
+st.markdown("<div class='main'>", unsafe_allow_html=True)
+
+# Header branding with title inside the box
 st.markdown("""
 <div style="display: flex; align-items: center; margin-bottom: 1rem;">
     <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo" style="height: 50px; margin-right: 10px;">
     <h2 style="color: white; margin: 0;">Employee Management Assistant</h2>
 </div>
 """, unsafe_allow_html=True)
-
-# Layout
-st.markdown("<div class='main'>", unsafe_allow_html=True)
 
 st.markdown("##### Example Questions")
 
