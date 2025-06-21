@@ -65,6 +65,19 @@ if email == UNRESTRICTED_EMAIL:
     else:
         st.success("✅ Admin access granted.")
 
+        # Add "View as User" toggle
+        view_as_user = st.checkbox("👀 View as regular user")
+
+        if view_as_user:
+            # Simulate standard user access
+            expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
+            st.success(f"🔓 Simulated user access. Trial active until {expiry.date()}")
+        else:
+            # Admin-only content goes here
+            st.markdown("🛠 You are viewing full admin capabilities.")
+            # Example admin-only features:
+            st.markdown("Here you could show debugging tools, metrics, or additional upload options.")
+
 # Case 2: Trial access for other users
 elif email:
     if email not in access_db:
