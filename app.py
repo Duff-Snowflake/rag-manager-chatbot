@@ -124,7 +124,7 @@ if st.button("Clear Response History"):
     st.session_state.history = []
 
 show_history = st.checkbox("Show response history")
-show_sources = st.checkbox("Show source documents")
+# show_sources = st.checkbox("Show source documents")
 
 def format_response(base_answer, query):
     prompt = f"""
