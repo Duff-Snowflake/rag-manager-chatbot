@@ -12,6 +12,7 @@ print("🛠️ Loaded key (first 10 chars):", OPENAI_API_KEY[:10])
 
 # Create embeddings using OpenAI
 embedding_model = OpenAIEmbeddings(
+    model="text-embedding-3-small",  # Use this instead of default
     openai_api_key=OPENAI_API_KEY
 )
 
