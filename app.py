@@ -137,7 +137,7 @@ ANSWER: {base_answer}
 Please output the following format:
 
 1. A refined and professional version of the answer above.
-2. Then, a list of 4 to 8 concrete example phrases the manager could say.
+2. Then, a list of 6 concrete example phrases the manager could say. 
    For each example, include a one-sentence explanation of *why* it works (the psychological or relational principle it supports).
 Output everything as markdown.
 """
