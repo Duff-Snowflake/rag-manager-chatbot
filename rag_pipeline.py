@@ -1,19 +1,19 @@
 import os
 from dotenv import load_dotenv
-# from langchain.community.embeddings import OpenAIEmbeddings
 from langchain_openai import OpenAIEmbeddings
-# from langchain.community.vectorstores import FAISS
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
 
 from pdf_chunker import parse_and_chunk_pdfs
 
 load_dotenv()
-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+print("🛠️ Loaded key (first 10 chars):", OPENAI_API_KEY[:10])
 
 # Create embeddings using OpenAI
-embedding_model = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+embedding_model = OpenAIEmbeddings(
+    openai_api_key=OPENAI_API_KEY
+)
 
 def create_faiss_index(chunks):
     # Wrap text chunks in Document objects
