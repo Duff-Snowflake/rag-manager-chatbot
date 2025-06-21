@@ -28,7 +28,7 @@ st.markdown("""
         background-color: #27374d;
         color: #ffffff;
         padding: 2rem;
-        padding-bottom: 4rem;
+        padding-bottom: 6rem;
         border-radius: 10px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         max-width: 800px;
@@ -39,7 +39,7 @@ st.markdown("""
     .stTextInput > div > div > input {
         background-color: #324a63;
         color: #ffffff;
-        font-size: 1.1rem;
+        font-size: 1.3rem;
         padding: 0.75rem;
         border-radius: 6px;
         border: none;
@@ -71,6 +71,14 @@ st.markdown("""
         border: none;
         border-radius: 6px;
     }
+    .footer-logo {
+        text-align: center;
+        margin-top: 2rem;
+    }
+    .footer-logo img {
+        width: 150px;
+        opacity: 0.8;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -94,16 +102,26 @@ example_questions = [
 if "query" not in st.session_state:
     st.session_state.query = ""
 
+if "history" not in st.session_state:
+    st.session_state.history = []
+
 # Button-driven input setter
 for i, q in enumerate(example_questions):
     if st.button(q, key=f"example_{i}"):
         st.session_state.query = q
 
 # Text input always visible
-user_input = st.text_input("Enter your questions here", value=st.session_state.query, placeholder="e.g., How do I give feedback to an avoidant employee?")
+user_input = st.text_input("Or enter your question here", value=st.session_state.query, placeholder="e.g., How do I give feedback to an avoidant employee?")
 
 # Update query from text input
 st.session_state.query = user_input
+
+# Clear history button
+if st.button("Clear Response History"):
+    st.session_state.history = []
+
+# Show history toggle
+show_history = st.checkbox("Show response history")
 
 def format_response(base_answer):
     prompt = f"""
@@ -116,7 +134,7 @@ ANSWER: {base_answer}
 Please output the following format:
 
 1. A refined and professional version of the answer above.
-2. Then, a list of 6 concrete example phrases the manager could say.
+2. Then, a list of 4 to 8 concrete example phrases the manager could say.
    For each example, include a one-sentence explanation of *why* it works (the psychological or relational principle it supports).
 Output everything as markdown.
 """
@@ -127,12 +145,23 @@ if st.session_state.query:
     with st.spinner("Thinking..."):
         base_answer = qa_chain.run(st.session_state.query)
         formatted = format_response(base_answer)
+        st.session_state.history.append({"q": st.session_state.query, "a": formatted})
     st.markdown(formatted)
 
-st.markdown("</div>", unsafe_allow_html=True)
+# Show history if enabled
+if show_history and st.session_state.history:
+    st.markdown("---")
+    st.markdown("#### 🔁 Previous Responses")
+    for entry in st.session_state.history:
+        st.markdown(f"**Q:** {entry['q']}")
+        st.markdown(entry['a'])
+        st.markdown("---")
+
+# Footer logo branding
 st.markdown("""
-    <div style='text-align: center; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #4a4a4a;'>
-        <img src='https://via.placeholder.com/150x40.png?text=Your+Logo+Here' alt='Your Brand' style='opacity:0.6;'>
-        <p style='font-size: 0.8rem; color: #ccc;'>© 2025 Your Company Name</p>
-    </div>
+<div class="footer-logo">
+    <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Your Branding Here">
+</div>
 """, unsafe_allow_html=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
