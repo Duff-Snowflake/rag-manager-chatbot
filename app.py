@@ -3,18 +3,82 @@ from langchain_community.chat_models import ChatOpenAI
 from rag_pipeline import load_faiss_index
 from langchain.chains import RetrievalQA
 import os
+# Email capture
+import json
+from datetime import datetime, timedelta
+
+USER_DB_PATH = "user_access.json"
+
+def load_users():
+    if os.path.exists(USER_DB_PATH):
+        with open(USER_DB_PATH, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_users(users):
+    with open(USER_DB_PATH, "w") as f:
+        json.dump(users, f, indent=2)
+
+def is_user_active(email, users):
+    if email not in users:
+        return False
+    start_date = datetime.strptime(users[email], "%Y-%m-%d")
+    return datetime.now() <= start_date + timedelta(days=7)
+
+
 from dotenv import load_dotenv
 from datetime import datetime
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Load retriever
-retriever = load_faiss_index().as_retriever(return_source_documents=True)
+# 🔒 Basic email capture / gating
+import json
+import os
+from datetime import datetime, timedelta
 
-# Load LLM and QA chain
-llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
-qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
+EMAIL_DB_PATH = "user_access.json"
+
+# Load or create email access record
+if os.path.exists(EMAIL_DB_PATH):
+    with open(EMAIL_DB_PATH, "r") as f:
+        access_db = json.load(f)
+else:
+    access_db = {}
+
+# UI to ask for email
+st.markdown("### 🔐 Access Required")
+email = st.text_input("Enter your email to access the assistant:", value="", max_chars=100)
+
+# Check and store access
+ACCESS_DURATION_DAYS = 7
+
+if email:
+    if email not in access_db:
+        access_db[email] = (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat()
+        with open(EMAIL_DB_PATH, "w") as f:
+            json.dump(access_db, f)
+
+    expiry = datetime.fromisoformat(access_db.get(email, "2000-01-01T00:00:00"))
+    if datetime.now() > expiry:
+        st.error("❌ Your trial has expired. Please contact us to extend access.")
+        st.stop()
+    else:
+        st.success(f"✅ Access granted. Trial active until {expiry.date()}")
+else:
+    st.warning("⏳ Please enter your email to begin your free trial.")
+    st.stop()
+
+    # Load retriever and assistant only if email is allowed
+    retriever = load_faiss_index().as_retriever(return_source_documents=True)
+
+    # Load LLM and QA chain
+    llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
+    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
+
+else:
+    st.warning("Please enter a valid email to continue.")
+    st.stop()
 
 # Inject custom CSS for dark corporate theme
 st.markdown("""
