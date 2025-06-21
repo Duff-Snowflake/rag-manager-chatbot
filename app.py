@@ -50,10 +50,23 @@ else:
 st.markdown("### 🔐 Welcome to your new tool for learning to motivate your teams")
 email = st.text_input("Please enter your email to access the assistant:", value="", max_chars=100)
 
+UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
+REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
+
 # Check and store access
 ACCESS_DURATION_DAYS = 7
 
-if email:
+# Case 1: Admin email
+if email == UNRESTRICTED_EMAIL:
+    password = st.text_input("Enter your password:", type="password")
+    if password != REQUIRED_PASSWORD:
+        st.error("🔐 Incorrect password.")
+        st.stop()
+    else:
+        st.success("✅ Admin access granted.")
+
+# Case 2: Trial access for other users
+elif email:
     if email not in access_db:
         access_db[email] = (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat()
         with open(EMAIL_DB_PATH, "w") as f:
@@ -75,10 +88,6 @@ else:
     # Load LLM and QA chain
     llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
-
-# else:
-#     st.warning("Please enter a valid email to continue.")
-#     st.stop()
 
 # Inject custom CSS for dark corporate theme
 st.markdown("""
