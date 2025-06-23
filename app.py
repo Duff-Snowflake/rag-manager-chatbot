@@ -3,7 +3,6 @@ from langchain_community.chat_models import ChatOpenAI
 from rag_pipeline import load_faiss_index
 from langchain.chains import RetrievalQA
 import os
-# Email capture
 import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -11,11 +10,9 @@ from dotenv import load_dotenv
 USER_DB_PATH = "user_access.json"
 EMAIL_DB_PATH = "user_access.json"
 
-# ... all imports ...
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# === Global constants and model setup ===
 UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
 REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
 ACCESS_DURATION_DAYS = 7
@@ -24,38 +21,19 @@ retriever = None
 qa_chain = None
 llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 
-# === Login & session logic ===
-def load_users():
-    if os.path.exists(USER_DB_PATH):
-        with open(USER_DB_PATH, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_users(users):
-    with open(USER_DB_PATH, "w") as f:
-        json.dump(users, f, indent=2)
-
-def is_user_active(email, users):
-    if email not in users:
-        return False
-    start_date = datetime.strptime(users[email], "%Y-%m-%d")
-    return datetime.now() <= start_date + timedelta(days=7)
-
-# Load or create email access record
 if os.path.exists(EMAIL_DB_PATH):
     with open(EMAIL_DB_PATH, "r") as f:
         access_db = json.load(f)
 else:
     access_db = {}
 
-# ---------------------- Session State Initialization ----------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-
 if "email" not in st.session_state:
     st.session_state.email = ""
+if "admin_mode" not in st.session_state:
+    st.session_state.admin_mode = False
 
-# ---------------------- Login Section ----------------------
 if not st.session_state.authenticated:
     st.markdown("### Understanding and motivating your teams")
     st.markdown("##### Personality types and how to get the most out of them")
@@ -70,15 +48,10 @@ if not st.session_state.authenticated:
         password = st.text_input("Enter your password:", type="password")
         if password:
             if password == REQUIRED_PASSWORD:
-                st.success("✅ Admin access granted.")
                 st.session_state.authenticated = True
-
-                view_as_user = st.checkbox("View as regular user")
-                if view_as_user:
-                    expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
-                    st.success(f"Simulated user access. Trial active until {expiry.date()}")
-                else:
-                    st.markdown("You are viewing full admin capabilities.")
+                st.session_state.admin_mode = not st.checkbox("View as regular user")
+                expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
+                st.success(f"Admin access granted. Trial active until {expiry.date()}")
             else:
                 st.error("Incorrect password.")
                 st.stop()
@@ -96,21 +69,27 @@ if not st.session_state.authenticated:
             st.error("❌ Your trial has expired. Please contact us to extend access.")
             st.stop()
         else:
-            st.success(f"Access granted. Trial active until {expiry.date()}")
             st.session_state.authenticated = True
+            st.session_state.admin_mode = False
+            st.success(f"Access granted. Trial active until {expiry.date()}")
     else:
         st.warning("Please enter your email to begin your free trial.")
         st.stop()
-else:
-    email = st.session_state.email
-    st.success(f"✅ Logged in as: {email}")
+
+# Authenticated block
+email = st.session_state.email
+st.success(f"Logged in as: {email}")
+
+if retriever is None:
+    retriever = load_faiss_index().as_retriever(return_source_documents=True)
+    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
 col1, col2, col3 = st.columns([5, 2, 2])
-
 with col3:
     if st.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.email = ""
+        st.session_state.admin_mode = False
         st.rerun()
 
     # Setup retriever and chain if not already done (optional guard)
@@ -276,7 +255,7 @@ if st.session_state.query and qa_chain:
 
 if show_history and st.session_state.history:
     st.markdown("---")
-    st.markdown("#### 🔁 Previous Responses")
+    st.markdown("#### Previous Responses")
     for entry in st.session_state.history:
         st.markdown(f"**Q ({entry['t']}):** {entry['q']}")
         st.markdown(entry['a'])
