@@ -38,7 +38,8 @@ else:
     access_db = {}
 
 # UI to ask for email
-st.markdown("### 🔐 Welcome to your new tool for learning to motivate your teams")
+st.markdown("### Understanding and motivating your teams")
+st.markdown("##### Personality types and how to get the most out of them")
 email = st.text_input("Please enter your email to access the assistant:", value="", max_chars=100)
 
 UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
@@ -53,17 +54,17 @@ llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 if email == UNRESTRICTED_EMAIL:
     password = st.text_input("Enter your password:", type="password")
     if password != REQUIRED_PASSWORD:
-        st.error("🔐 Incorrect password.")
+        st.error("Incorrect password.")
         st.stop()
     else:
         st.success("✅ Admin access granted.")
-        view_as_user = st.checkbox("👀 View as regular user")
+        view_as_user = st.checkbox("View as regular user")
 
         if view_as_user:
             expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
-            st.success(f"🔓 Simulated user access. Trial active until {expiry.date()}")
+            st.success(f"Simulated user access. Trial active until {expiry.date()}")
         else:
-            st.markdown("🛠 You are viewing full admin capabilities.")
+            st.markdown("You are viewing full admin capabilities.")
             st.markdown("Here you could show debugging tools, metrics, or additional upload options.")
 
         retriever = load_faiss_index().as_retriever(return_source_documents=True)
@@ -81,11 +82,11 @@ elif email:
         st.error("❌ Your trial has expired. Please contact us to extend access.")
         st.stop()
     else:
-        st.success(f"✅ Access granted. Trial active until {expiry.date()}")
+        st.success(f"Access granted. Trial active until {expiry.date()}")
         retriever = load_faiss_index().as_retriever(return_source_documents=True)
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 else:
-    st.warning("⏳ Please enter your email to begin your free trial.")
+    st.warning("Please enter your email to begin your free trial.")
     st.stop()
 
 # Inject custom CSS for dark corporate theme
