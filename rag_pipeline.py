@@ -12,24 +12,35 @@ print("🛠️ Loaded key (first 10 chars):", OPENAI_API_KEY[:10])
 
 # Create embeddings using OpenAI
 embedding_model = OpenAIEmbeddings(
-    model="text-embedding-3-small",  # Use this instead of default
+    model="text-embedding-3-small",
     openai_api_key=OPENAI_API_KEY
 )
 
 def create_faiss_index(chunks):
-    # Wrap text chunks in Document objects
     docs = [Document(page_content=chunk) for chunk in chunks]
     
     print("🔄 Creating FAISS vector store...")
     vectorstore = FAISS.from_documents(docs, embedding_model)
     
-    # Save it locally
     vectorstore.save_local("faiss_index")
     print("✅ FAISS index saved to /faiss_index")
 
 def load_faiss_index():
-    print("📂 Loading FAISS index...")
-    index_path = os.path.join(os.path.dirname(__file__), "faiss_index")
+    index_path = "faiss_index"
+    
+    if not os.path.exists(index_path):
+        print("⚠️ FAISS index not found — rebuilding from PDF.")
+        try:
+            chunks = parse_and_chunk_pdfs()
+            if not chunks:
+                raise ValueError("No chunks returned from parse_and_chunk_pdfs()")
+            create_faiss_index(chunks)
+        except Exception as e:
+            print("❌ Error building FAISS index:", e)
+            raise e
+    else:
+        print("✅ FAISS index found. Loading...")
+
     return FAISS.load_local(index_path, embedding_model, allow_dangerous_deserialization=True)
 
 def query_vectorstore(vectorstore, query, k=3):
@@ -41,7 +52,6 @@ if __name__ == "__main__":
     chunks = parse_and_chunk_pdfs()
     create_faiss_index(chunks)
 
-    # Example query:
     db = load_faiss_index()
     answers = query_vectorstore(db, "How can I motivate an avoidantly attached employee?")
     
