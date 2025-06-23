@@ -11,19 +11,20 @@ from dotenv import load_dotenv
 USER_DB_PATH = "user_access.json"
 EMAIL_DB_PATH = "user_access.json"
 
+# ... all imports ...
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Auth + AI constants
+# === Global constants and model setup ===
 UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
 REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
 ACCESS_DURATION_DAYS = 7
 
-# LLM + Retrieval
 retriever = None
 qa_chain = None
 llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 
+# === Login & session logic ===
 def load_users():
     if os.path.exists(USER_DB_PATH):
         with open(USER_DB_PATH, "r") as f:
@@ -47,38 +48,42 @@ if os.path.exists(EMAIL_DB_PATH):
 else:
     access_db = {}
 
-# Initialize session state
+# ---------------------- Session State Initialization ----------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if "email" not in st.session_state:
     st.session_state.email = ""
 
-# Show login form only if not authenticated
+# ---------------------- Login Section ----------------------
 if not st.session_state.authenticated:
     st.markdown("### Understanding and motivating your teams")
     st.markdown("##### Personality types and how to get the most out of them")
-    email = st.text_input("Please enter your email to access the assistant:", value="", max_chars=100)
-    st.session_state.email = email  # store for later use
+
+    email_input = st.text_input("Please enter your email to access the assistant:", value="", max_chars=100)
+    if email_input:
+        st.session_state.email = email_input
+
+    email = st.session_state.email
 
     if email == UNRESTRICTED_EMAIL:
         password = st.text_input("Enter your password:", type="password")
-        if password != REQUIRED_PASSWORD:
-            st.error("Incorrect password.")
-            st.stop()
-        else:
-            st.success("Admin access granted.")
-            st.session_state.authenticated = True
-            view_as_user = st.checkbox("View as regular user")
+        if password:
+            if password == REQUIRED_PASSWORD:
+                st.success("✅ Admin access granted.")
+                st.session_state.authenticated = True
 
-            if view_as_user:
-                expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
-                st.success(f"Simulated user access. Trial active until {expiry.date()}")
+                view_as_user = st.checkbox("View as regular user")
+                if view_as_user:
+                    expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
+                    st.success(f"Simulated user access. Trial active until {expiry.date()}")
+                else:
+                    st.markdown("You are viewing full admin capabilities.")
             else:
-                st.markdown("You are viewing full admin capabilities.")
-
-            retriever = load_faiss_index().as_retriever(return_source_documents=True)
-            qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
+                st.error("Incorrect password.")
+                st.stop()
+        else:
+            st.stop()
 
     elif email:
         if email not in access_db:
@@ -93,20 +98,16 @@ if not st.session_state.authenticated:
         else:
             st.success(f"Access granted. Trial active until {expiry.date()}")
             st.session_state.authenticated = True
-
-            retriever = load_faiss_index().as_retriever(return_source_documents=True)
-            qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
     else:
-        st.warning("⏳ Please enter your email to begin your free trial.")
+        st.warning("Please enter your email to begin your free trial.")
         st.stop()
-
 else:
     email = st.session_state.email
-    st.success(f"Logged in as: {email}")
+    st.success(f"✅ Logged in as: {email}")
     if st.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.email = ""
-        st.experimental_rerun()
+        st.rerun()
 
     # Setup retriever and chain if not already done (optional guard)
     if retriever is None:
