@@ -105,7 +105,7 @@ else:
     email = st.session_state.email
     st.success(f"✅ Logged in as: {email}")
 
-col1, col2, col3 = st.columns([6, 1, 1])
+col1, col2, col3 = st.columns([5, 2, 2])
 
 with col3:
     if st.button("Logout"):
@@ -162,6 +162,7 @@ st.markdown("""
         justify-content: center;
     }
     div.stButton > button {
+        white-space: nowrap;
         width: auto !important;
         padding: 0.5rem 1rem;
         font-size: 1rem;
@@ -170,7 +171,6 @@ st.markdown("""
         color: white;
         border: none;
         border-radius: 6px;
-        float: right;
     }
     .footer-logo {
         text-align: center;
@@ -218,7 +218,7 @@ if "history" not in st.session_state:
 user_input = st.text_input("Or enter your question here", value=st.session_state.query, placeholder="e.g., How do I give feedback to an avoidant employee?")
 st.session_state.query = user_input
 
-col1, col2, col3 = st.columns([6, 1, 1])
+col1, col2, col3 = st.columns([5, 2, 2])
 
 with col2:
     if st.button("Clear Response History"):
