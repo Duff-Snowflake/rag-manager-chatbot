@@ -106,9 +106,7 @@ st.markdown("""
         border-radius: 10px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         max-width: 800px;
-        margin: auto;
-        max-height: 90vh;
-        overflow-y: auto;    
+        margin: auto; 
     }
     .stTextInput > div > div > input {
         background-color: #324a63;
@@ -164,6 +162,13 @@ st.markdown("""
     <h2 style="color: white; margin: 0;">Employee Management Assistant</h2>
 </div>
 """, unsafe_allow_html=True)
+
+# ✅ Debug check — this line should always appear
+st.markdown("✅ You are inside the main UI container.")
+
+st.markdown("I am an agent that is designed to help you with understanding how to better motivate the members of your team and motivate your reports.")
+
+st.markdown("The language we use can directly affect how people respond to us.  Mastering this allows us to create more productive teams that meet and exceed deadlines, produce quality and have lower levels of passive push-back.")
 
 st.markdown("##### Example Questions")
 
