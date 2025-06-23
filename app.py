@@ -169,7 +169,7 @@ st.markdown("The language we use can directly affect how people respond to us.  
 
 st.markdown("##### Example Questions")
 
-with st.expander("💡 Questions to get you started", expanded=False):
+with st.expander("Questions to get you started", expanded=False):
     example_questions = [
         "How can I figure out what type of person I am dealing with?",
         "How do I motivate someone with an anxious attachment style?",
@@ -178,9 +178,9 @@ with st.expander("💡 Questions to get you started", expanded=False):
         "What should I say when an employee takes credit for others' work?" 
     ]
 
-for i, q in enumerate(example_questions):
-    if st.button(q, key=f"example_{i}"):
-        st.session_state.query = q
+    for i, q in enumerate(example_questions):
+        if st.button(q, key=f"example_{i}"):
+            st.session_state.query = q
 
 if "query" not in st.session_state:
     st.session_state.query = ""
@@ -208,7 +208,7 @@ ANSWER: {base_answer}
 Please output the following format:
 
 1. A refined and professional version of the answer above.
-2. Then, a list of 6 concrete example phrases the manager could say. 
+2. Then, a list of 6 concrete example phrases the manager could say. Extrapolate from the data you have to generate natural sounding suggestions. 
    For each example, include a one-sentence explanation of *why* it works (the psychological or relational principle it supports).
 Output everything as markdown.
 """
