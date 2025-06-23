@@ -163,22 +163,20 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ✅ Debug check — this line should always appear
-st.markdown("✅ You are inside the main UI container.")
-
-st.markdown("I am an agent that is designed to help you with understanding how to better motivate the members of your team and motivate your reports.")
+st.markdown("###### I am an agent that is designed to help you with understanding how to better motivate the members of your teams and your direct reports.")
 
 st.markdown("The language we use can directly affect how people respond to us.  Mastering this allows us to create more productive teams that meet and exceed deadlines, produce quality and have lower levels of passive push-back.")
 
 st.markdown("##### Example Questions")
 
-example_questions = [
-    "How can I figure out what type of person I am dealing with?",
-    "How do I motivate someone with an anxious attachment style?",
-    "How do I give feedback to an avoidant employee?",
-    "How can I deliver bad news without making someone shut down?",
-    "What should I say when an employee takes credit for others' work?" 
-]
+with st.expander("💡 Questions to get you started", expanded=False):
+    example_questions = [
+        "How can I figure out what type of person I am dealing with?",
+        "How do I motivate someone with an anxious attachment style?",
+        "How do I give feedback to an avoidant employee?",
+        "How can I deliver bad news without making someone shut down?",
+        "What should I say when an employee takes credit for others' work?" 
+    ]
 
 if "query" not in st.session_state:
     st.session_state.query = ""
