@@ -178,15 +178,15 @@ with st.expander("💡 Questions to get you started", expanded=False):
         "What should I say when an employee takes credit for others' work?" 
     ]
 
+for i, q in enumerate(example_questions):
+    if st.button(q, key=f"example_{i}"):
+        st.session_state.query = q
+
 if "query" not in st.session_state:
     st.session_state.query = ""
 
 if "history" not in st.session_state:
     st.session_state.history = []
-
-for i, q in enumerate(example_questions):
-    if st.button(q, key=f"example_{i}"):
-        st.session_state.query = q
 
 user_input = st.text_input("Or enter your question here", value=st.session_state.query, placeholder="e.g., How do I give feedback to an avoidant employee?")
 st.session_state.query = user_input
