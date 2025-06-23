@@ -121,12 +121,18 @@ with col3:
 # Inject custom CSS for dark corporate theme
 st.markdown("""
     <style>
+    body, .main, .block-container {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
     html, body {
         background-color: #1b2a41;
         color: #ffffff;
         margin: 0;
         padding: 0;
     }
+
     .main {
         background-color: #27374d;
         color: #ffffff;
@@ -135,8 +141,9 @@ st.markdown("""
         border-radius: 10px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         max-width: 800px;
-        margin: auto; 
+        margin: auto;
     }
+
     .stTextInput > div > div > input {
         background-color: #324a63;
         color: #ffffff;
@@ -145,22 +152,31 @@ st.markdown("""
         border-radius: 6px;
         border: none;
     }
+
     .stSpinner {
         color: #ffffff !important;
     }
+
     h1, h2, h3, h4 {
         color: #ffffff;
     }
+
     header, .block-container:has(header), .css-1avcm0n.ezrtsby2 {
         display: none !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
+
     footer {
         visibility: hidden;
     }
+
     div.stButton {
         display: flex;
-        justify-content: center;
+        justify-content: flex-end;
     }
+
     div.stButton > button {
         white-space: nowrap;
         width: auto !important;
@@ -172,18 +188,18 @@ st.markdown("""
         border: none;
         border-radius: 6px;
     }
+
     .footer-logo {
         text-align: center;
         margin-top: 2rem;
     }
+
     .footer-logo img {
         width: 150px;
         opacity: 0.8;
     }
     </style>
 """, unsafe_allow_html=True)
-
-st.markdown("<div class='main'>", unsafe_allow_html=True)
 
 st.markdown("""
 <div style="display: flex; align-items: center; margin-bottom: 1rem;">
