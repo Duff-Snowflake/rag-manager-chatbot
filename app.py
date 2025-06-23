@@ -167,7 +167,11 @@ st.markdown("""
         border: none;
         border-radius: 6px;
     }
-
+    .centered-button {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 1rem;
+    }
     .footer-logo {
         text-align: center;
         margin-top: 2rem;
@@ -215,9 +219,11 @@ st.session_state.query = user_input
 
 col1, col2, col3 = st.columns([5, 2, 2])
 
-with col2:
+with col1:
+    st.markdown('<div class="centered-button">', unsafe_allow_html=True)
     if st.button("Clear Response History"):
         st.session_state.history = []
+    st.markdown('</div>', unsafe_allow_html=True)
 
 show_history = st.checkbox("Show response history")
 
