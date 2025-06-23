@@ -65,7 +65,7 @@ if email == UNRESTRICTED_EMAIL:
             st.success(f"Simulated user access. Trial active until {expiry.date()}")
         else:
             st.markdown("You are viewing full admin capabilities.")
-            st.markdown("Here you could show debugging tools, metrics, or additional upload options.")
+            # st.markdown("Here you could show debugging tools, metrics, or additional upload options.")
 
         retriever = load_faiss_index().as_retriever(return_source_documents=True)
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
