@@ -14,6 +14,16 @@ EMAIL_DB_PATH = "user_access.json"
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# Auth + AI constants
+UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
+REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
+ACCESS_DURATION_DAYS = 7
+
+# LLM + Retrieval
+retriever = None
+qa_chain = None
+llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
+
 def load_users():
     if os.path.exists(USER_DB_PATH):
         with open(USER_DB_PATH, "r") as f:
@@ -37,57 +47,71 @@ if os.path.exists(EMAIL_DB_PATH):
 else:
     access_db = {}
 
-# UI to ask for email
-st.markdown("### Understanding and motivating your teams")
-st.markdown("##### Personality types and how to get the most out of them")
-email = st.text_input("Please enter your email to access the assistant:", value="", max_chars=100)
+# Initialize session state
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
-UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
-REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
-ACCESS_DURATION_DAYS = 7
+if "email" not in st.session_state:
+    st.session_state.email = ""
 
-retriever = None
-qa_chain = None
-llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
+# Show login form only if not authenticated
+if not st.session_state.authenticated:
+    st.markdown("### Understanding and motivating your teams")
+    st.markdown("##### Personality types and how to get the most out of them")
+    email = st.text_input("Please enter your email to access the assistant:", value="", max_chars=100)
+    st.session_state.email = email  # store for later use
 
-# Case 1: Admin email
-if email == UNRESTRICTED_EMAIL:
-    password = st.text_input("Enter your password:", type="password")
-    if password != REQUIRED_PASSWORD:
-        st.error("Incorrect password.")
-        st.stop()
-    else:
-        st.success("✅ Admin access granted.")
-        view_as_user = st.checkbox("View as regular user")
-
-        if view_as_user:
-            expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
-            st.success(f"Simulated user access. Trial active until {expiry.date()}")
+    if email == UNRESTRICTED_EMAIL:
+        password = st.text_input("Enter your password:", type="password")
+        if password != REQUIRED_PASSWORD:
+            st.error("Incorrect password.")
+            st.stop()
         else:
-            st.markdown("You are viewing full admin capabilities.")
-            # st.markdown("Here you could show debugging tools, metrics, or additional upload options.")
+            st.success("Admin access granted.")
+            st.session_state.authenticated = True
+            view_as_user = st.checkbox("View as regular user")
 
-        retriever = load_faiss_index().as_retriever(return_source_documents=True)
-        qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
+            if view_as_user:
+                expiry = datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)
+                st.success(f"Simulated user access. Trial active until {expiry.date()}")
+            else:
+                st.markdown("You are viewing full admin capabilities.")
 
-# Case 2: Trial access for other users
-elif email:
-    if email not in access_db:
-        access_db[email] = (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat()
-        with open(EMAIL_DB_PATH, "w") as f:
-            json.dump(access_db, f)
+            retriever = load_faiss_index().as_retriever(return_source_documents=True)
+            qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
-    expiry = datetime.fromisoformat(access_db.get(email, "2000-01-01T00:00:00"))
-    if datetime.now() > expiry:
-        st.error("❌ Your trial has expired. Please contact us to extend access.")
-        st.stop()
+    elif email:
+        if email not in access_db:
+            access_db[email] = (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat()
+            with open(EMAIL_DB_PATH, "w") as f:
+                json.dump(access_db, f)
+
+        expiry = datetime.fromisoformat(access_db.get(email, "2000-01-01T00:00:00"))
+        if datetime.now() > expiry:
+            st.error("❌ Your trial has expired. Please contact us to extend access.")
+            st.stop()
+        else:
+            st.success(f"Access granted. Trial active until {expiry.date()}")
+            st.session_state.authenticated = True
+
+            retriever = load_faiss_index().as_retriever(return_source_documents=True)
+            qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
     else:
-        st.success(f"Access granted. Trial active until {expiry.date()}")
+        st.warning("⏳ Please enter your email to begin your free trial.")
+        st.stop()
+
+else:
+    email = st.session_state.email
+    st.success(f"Logged in as: {email}")
+    if st.button("Logout"):
+        st.session_state.authenticated = False
+        st.session_state.email = ""
+        st.experimental_rerun()
+
+    # Setup retriever and chain if not already done (optional guard)
+    if retriever is None:
         retriever = load_faiss_index().as_retriever(return_source_documents=True)
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
-else:
-    st.warning("Please enter your email to begin your free trial.")
-    st.stop()
 
 # Inject custom CSS for dark corporate theme
 st.markdown("""
@@ -163,11 +187,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("###### I am an agent that is designed to help you with understanding how to better motivate the members of your teams and your direct reports.")
+st.markdown("I am an agent that is designed to help you with understanding how to better motivate the members of your teams and your direct reports.")
 
 st.markdown("The language we use can directly affect how people respond to us.  Mastering this allows us to create more productive teams that meet and exceed deadlines, produce quality and have lower levels of passive push-back.")
-
-st.markdown("##### Example Questions")
 
 with st.expander("Questions to get you started", expanded=False):
     example_questions = [
