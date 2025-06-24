@@ -128,9 +128,9 @@ if st.session_state.authenticated:
         }
 
         .button-wrapper {
-        width: 100%;
-        display: flex;
-        justify-content: center;
+            width: 100%;
+            display: flex;
+            justify-content: center;
         }
 
         .centered-button {
