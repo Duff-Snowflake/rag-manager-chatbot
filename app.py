@@ -127,6 +127,12 @@ if st.session_state.authenticated:
             gap: 0.5rem;
         }
 
+        .button-wrapper {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        }
+
         .centered-button {
             display: flex;
             justify-content: center;
@@ -212,8 +218,10 @@ if st.session_state.authenticated:
     ]
 
     for i, q in enumerate(example_questions):
+        st.markdown('<div class="button-wrapper">', unsafe_allow_html=True)
         if st.button(q, key=f"example_{i}"):
             st.session_state.query = q
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
