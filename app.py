@@ -168,7 +168,7 @@ if st.session_state.authenticated:
 
         div.stButton {
             display: flex;
-            justify-content: flex-end;
+            justify-content: center;
         }
 
         div.stButton > button {
@@ -209,21 +209,21 @@ if st.session_state.authenticated:
     with st.expander("Questions to get you started", expanded=False):
         st.markdown('<div class="question-buttons">', unsafe_allow_html=True)
 
-    example_questions = [
-        "How can I figure out what type of person I am dealing with?",
-        "How do I motivate someone with an anxious attachment style?",
-        "How do I give feedback to an avoidant employee?",
-        "How can I deliver bad news without making someone shut down?",
-        "What should I say when an employee takes credit for others' work?" 
-    ]
+        example_questions = [
+            "How can I figure out what type of person I am dealing with?",
+            "How do I motivate someone with an anxious attachment style?",
+            "How do I give feedback to an avoidant employee?",
+            "How can I deliver bad news without making someone shut down?",
+            "What should I say when an employee takes credit for others' work?" 
+        ]
 
-    for i, q in enumerate(example_questions):
-        st.markdown('<div class="button-wrapper">', unsafe_allow_html=True)
-        if st.button(q, key=f"example_{i}"):
-            st.session_state.query = q
+        for i, q in enumerate(example_questions):
+            st.markdown('<div class="button-wrapper">', unsafe_allow_html=True)
+            if st.button(q, key=f"example_{i}"):
+                st.session_state.query = q
+            st.markdown('</div>', unsafe_allow_html=True)
+
         st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if "query" not in st.session_state:
         st.session_state.query = ""
