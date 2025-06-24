@@ -37,7 +37,6 @@ Respond as if you're speaking directly to the manager in a conversational, coach
 2. Then, naturally introduce 6 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
 3. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
 4. Write the full response as markdown, in a voice that feels like a warm, confident expert guiding someone through a challenge.
-5. Do not start each response with "Absolutely"
 
 Avoid repeating the query or answer unless it's helpful to reframe. Be clear, empathetic, and concrete.
 """
@@ -161,16 +160,20 @@ if st.session_state.authenticated:
                 st.session_state.submitted_query = q
 
     col_submit, col_clear = st.columns([1, 1])
+
 with col_submit:
     query_input = st.text_input(
         "Talk to me about what you are having trouble with",
         key="query_input_box",
         placeholder="e.g., How do I give feedback to an avoidant employee?"
     )
+    if st.button("Submit"):
+        if query_input and (not st.session_state.history or query_input != st.session_state.history[-1]["q"]):
+            st.session_state.submitted_query = query_input
 
 with col_clear:
-    
-
+    if st.button("Clear Response History"):
+        st.session_state.history = []
 if st.button("Submit"):
     if query_input and (not st.session_state.history or query_input != st.session_state.history[-1]["q"]):
         st.session_state.submitted_query = query_input
