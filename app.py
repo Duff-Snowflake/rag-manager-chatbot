@@ -262,20 +262,6 @@ if st.session_state.authenticated:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # === Sample Questions in Expander ===
-    with st.expander("Questions to get you started", expanded=False):
-        example_questions = [
-            "How can I figure out what type of person I am dealing with?",
-            "How do I motivate someone with an anxious attachment style?",
-            "How do I give feedback to an avoidant employee?",
-            "How can I deliver bad news without making someone shut down?",
-            "What should I say when an employee takes credit for others' work?" 
-        ]
-
-        for i, q in enumerate(example_questions):
-            if st.button(q, key=f"example_{i}"):
-                st.session_state.query = q
-
     # === Input & Clear Button Centered ===
     if "query" not in st.session_state:
         st.session_state.query = ""
@@ -290,10 +276,45 @@ if st.session_state.authenticated:
     )
     st.session_state.query = user_input
 
+    if st.session_state.query and qa_chain:
+        with st.spinner("Thinking..."):
+            result = qa_chain({"query": st.session_state.query})
+            base_answer = result["result"]
+            formatted = format_response(base_answer, st.session_state.query)
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state.history.append({
+                "q": st.session_state.query,
+                "a": formatted,
+                "t": timestamp,
+                "sources": result.get("source_documents", [])
+            })
+        st.markdown(formatted)
+
+    # Centered Clear History button
     st.markdown('<div class="centered-button">', unsafe_allow_html=True)
     if st.button("Clear Response History"):
         st.session_state.history = []
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # Expander below the chat
+    with st.expander("Questions to get you started", expanded=False):
+        st.markdown('<div class="question-buttons">', unsafe_allow_html=True)
+
+        example_questions = [
+            "How can I figure out what type of person I am dealing with?",
+            "How do I motivate someone with an anxious attachment style?",
+            "How do I give feedback to an avoidant employee?",
+            "How can I deliver bad news without making someone shut down?",
+            "What should I say when an employee takes credit for others' work?"
+        ]
+
+        for i, q in enumerate(example_questions):
+            st.markdown('<div class="button-wrapper">', unsafe_allow_html=True)
+            if st.button(q, key=f"example_{i}"):
+                st.session_state.query = q
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
     def format_response(base_answer, query):
         prompt = f"""
@@ -315,19 +336,7 @@ if st.session_state.authenticated:
     """
         return llm.invoke(prompt).content
 
-    if st.session_state.query and qa_chain:
-        with st.spinner("Thinking..."):
-            result = qa_chain({"query": st.session_state.query})
-            base_answer = result["result"]
-            formatted = format_response(base_answer, st.session_state.query)
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.session_state.history.append({
-                "q": st.session_state.query,
-                "a": formatted,
-                "t": timestamp,
-                "sources": result.get("source_documents", [])
-            })
-        st.markdown(formatted)
+
 
     st.markdown("""
     <div class="footer-logo">
