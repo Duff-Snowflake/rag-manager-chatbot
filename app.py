@@ -21,6 +21,26 @@ retriever = None
 qa_chain = None
 llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 
+def format_response(base_answer, query):
+    prompt = f"""
+You are a management communication coach with deep expertise in attachment theory and interpersonal motivation.
+
+Imagine the following manager has asked you a question:
+
+QUERY: {query}
+ANSWER: {base_answer}
+
+Respond as if you're speaking directly to the manager in a conversational, coaching style.
+
+1. Begin with a short, encouraging summary of your interpretation of their situation and your high-level advice — spoken as if you're in a 1-on-1 session.
+2. Then, naturally introduce 6 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
+3. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
+4. Write the full response as markdown, in a voice that feels like a warm, confident expert guiding someone through a challenge.
+
+Avoid repeating the query or answer unless it's helpful to reframe. Be clear, empathetic, and concrete.
+"""
+    return llm.invoke(prompt).content
+
 if os.path.exists(EMAIL_DB_PATH):
     with open(EMAIL_DB_PATH, "r") as f:
         access_db = json.load(f)
@@ -282,26 +302,6 @@ if st.session_state.authenticated:
     if st.button("Clear Response History"):
         st.session_state.history = []
     st.markdown('</div>', unsafe_allow_html=True)
-
-    def format_response(base_answer, query):
-        prompt = f"""
-    You are a management communication coach with deep expertise in attachment theory and interpersonal motivation.
-
-    Imagine the following manager has asked you a question:
-
-    QUERY: {query}
-    ANSWER: {base_answer}
-
-    Respond as if you're speaking directly to the manager in a conversational, coaching style.
-
-    1. Begin with a short, encouraging summary of your interpretation of their situation and your high-level advice — spoken as if you're in a 1-on-1 session.
-    2. Then, naturally introduce 6 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
-    3. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
-    4. Write the full response as markdown, in a voice that feels like a warm, confident expert guiding someone through a challenge.
-
-    Avoid repeating the query or answer unless it's helpful to reframe. Be clear, empathetic, and concrete.
-    """
-        return llm.invoke(prompt).content
 
     st.markdown("""
     <div class="footer-logo">
