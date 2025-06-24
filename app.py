@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from langchain_community.chat_models import ChatOpenAI
 from rag_pipeline import load_faiss_index
 from langchain.chains import RetrievalQA
@@ -276,12 +277,41 @@ if st.session_state.authenticated:
     if "history" not in st.session_state:
         st.session_state.history = []
 
+
+
     user_input = st.text_input(
         "Or enter your question here",
         value=st.session_state.query,
         placeholder="e.g., How do I give feedback to an avoidant employee?"
     )
     st.session_state.query = user_input
+
+
+
+
+    chat_container = st.container()
+    with chat_container:
+        st.markdown('<div class="chat-box">', unsafe_allow_html=True)
+        for entry in st.session_state.history:
+            st.markdown(f'<div class="chat-entry">', unsafe_allow_html=True)
+            st.markdown(f'<div class="chat-question">👤 {entry["q"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="chat-response">{entry["a"]}</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Auto-scroll to latest response
+        components.html(
+            """
+            <script>
+            const chatBox = window.parent.document.querySelector('.chat-box');
+            if (chatBox) {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+            </script>
+            """,
+            height=0,
+            scrolling=False
+        )
 
     if st.session_state.query and qa_chain:
         with st.spinner("Thinking..."):
@@ -294,8 +324,12 @@ if st.session_state.authenticated:
                 "a": formatted,
                 "t": timestamp,
                 "sources": result.get("source_documents", [])
-            })
-        st.markdown(formatted)
+        })
+    st.rerun()
+
+
+
+
 
     # Centered Clear History button
     st.markdown('<div class="centered-button">', unsafe_allow_html=True)
