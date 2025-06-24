@@ -120,6 +120,31 @@ if st.session_state.authenticated:
             margin: auto;
         }
 
+        .chat-box {
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: #1e2e3f;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid #324a63;
+        }
+                
+        .chat-entry {
+            margin-bottom: 1.5rem;
+        }
+                
+        .chat-question {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            color: #ffffff;
+        }
+                
+        .chat-response {
+            color: #dddddd;
+            white-space: pre-wrap;
+        }      
+
         .question-buttons {
             display: flex;
             flex-direction: column;
@@ -206,6 +231,18 @@ if st.session_state.authenticated:
 
     st.markdown("The language we use can directly affect how people respond to us.  Mastering this allows us to create more productive teams that meet and exceed deadlines, produce quality and have lower levels of passive push-back.")
 
+    # Scrollable chat window
+    if "history" in st.session_state and st.session_state.history:
+        st.markdown('<div class="chat-box">', unsafe_allow_html=True)
+        for entry in st.session_state.history:
+            st.markdown(f'''
+                <div class="chat-entry">
+                    <div class="chat-question">Q ({entry["t"]}): {entry["q"]}</div>
+                    <div class="chat-response">{entry["a"]}</div>
+                </div>
+            ''', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
     with st.expander("Questions to get you started", expanded=False):
         st.markdown('<div class="question-buttons">', unsafe_allow_html=True)
 
@@ -243,7 +280,7 @@ if st.session_state.authenticated:
         st.session_state.history = []
     st.markdown('</div>', unsafe_allow_html=True)
 
-    show_history = st.checkbox("Show response history")
+    # show_history = st.checkbox("Show response history") */ no longer needed
 
     def format_response(base_answer, query):
         prompt = f"""
