@@ -115,8 +115,6 @@ if st.session_state.authenticated:
         retriever = load_faiss_index().as_retriever(return_source_documents=True)
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
-    if "query" not in st.session_state:
-        st.session_state.query = ""
     if "submitted_query" not in st.session_state:
         st.session_state.submitted_query = ""
     if "history" not in st.session_state:
@@ -160,16 +158,16 @@ if st.session_state.authenticated:
         for i, q in enumerate(example_questions):
             if st.button(q, key=f"example_{i}"):
                 st.session_state.submitted_query = q
-                st.rerun()
 
     query_input = st.text_input(
         "Talk to me about what you are having trouble with",
+        key="query_input_box",
         placeholder="e.g., How do I give feedback to an avoidant employee?"
     )
 
-    if query_input and (not st.session_state.history or query_input != st.session_state.history[-1]["q"]):
-        st.session_state.submitted_query = query_input
-        st.rerun()
+    if st.button("Submit"):
+        if query_input and (not st.session_state.history or query_input != st.session_state.history[-1]["q"]):
+            st.session_state.submitted_query = query_input
 
     chat_container = st.container()
     with chat_container:
@@ -214,6 +212,6 @@ if st.session_state.authenticated:
 
     st.markdown("""
     <div class="footer-logo">
-        <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Your Branding Here">
-    </div>
+    <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Your Branding Here" style="width: 0.25%;">
+</div>
     """, unsafe_allow_html=True)
