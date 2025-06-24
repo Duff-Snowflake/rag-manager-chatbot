@@ -82,7 +82,7 @@ if not st.session_state.authenticated:
             st.success(f"Access granted until {datetime.fromisoformat(expiry).date()}")
             st.session_state.authenticated = True
     if st.session_state.authenticated:
-        st.experimental_rerun()
+        st.rerun()
     st.stop()
 
 # Authenticated: initialize retriever & QA chain
