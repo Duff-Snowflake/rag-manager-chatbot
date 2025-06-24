@@ -252,7 +252,7 @@ if st.session_state.authenticated:
     st.markdown("The language we use can directly affect how people respond to us.  Mastering this allows us to create more productive teams that meet and exceed deadlines, produce quality and have lower levels of passive push-back.")
 
     # === Sample questions section (now above input) ===
-    with st.expander("Questions to get you started", expanded=False):
+    with st.expander("Some sample questions to get you started", expanded=False):
         st.markdown('<div class="question-buttons">', unsafe_allow_html=True)
 
         example_questions = [
@@ -277,17 +277,17 @@ if st.session_state.authenticated:
     if "history" not in st.session_state:
         st.session_state.history = []
 
-
-
     user_input = st.text_input(
-        "Or enter your question here",
+        "Talk to me about what you are having trouble with",
         value=st.session_state.query,
         placeholder="e.g., How do I give feedback to an avoidant employee?"
     )
     st.session_state.query = user_input
 
-
-
+    # Only update the query if it's different from last submitted one
+    if user_input and (not st.session_state.history or user_input != st.session_state.history[-1]["q"]):
+        st.session_state.query = user_input
+        st.session_state.pending_query = True
 
     chat_container = st.container()
     with chat_container:
@@ -325,11 +325,8 @@ if st.session_state.authenticated:
                 "t": timestamp,
                 "sources": result.get("source_documents", [])
         })
-    st.rerun()
-
-
-
-
+        st.session_state.pending_query = False
+        st.rerun()
 
     # Centered Clear History button
     st.markdown('<div class="centered-button">', unsafe_allow_html=True)
