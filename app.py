@@ -280,8 +280,6 @@ if st.session_state.authenticated:
         st.session_state.history = []
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # show_history = st.checkbox("Show response history") */ no longer needed
-
     def format_response(base_answer, query):
         prompt = f"""
     You are a management communication coach with deep expertise in attachment theory and interpersonal motivation.
@@ -315,18 +313,6 @@ if st.session_state.authenticated:
                 "sources": result.get("source_documents", [])
             })
         st.markdown(formatted)
-
-    if show_history and st.session_state.history:
-        st.markdown("---")
-        st.markdown("#### 🔁 Previous Responses")
-        for entry in st.session_state.history:
-            st.markdown(f"**Q ({entry['t']}):** {entry['q']}")
-            st.markdown(entry['a'])
-            if entry.get("sources"):
-                st.markdown("**Sources:**")
-                for doc in entry["sources"]:
-                    st.markdown(f"- {doc.metadata.get('source', 'Unknown')}")
-            st.markdown("---")
 
     st.markdown("""
     <div class="footer-logo">
