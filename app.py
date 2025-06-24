@@ -89,17 +89,20 @@ if 'retriever' not in globals() or retriever is None:
     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
 # Process any new submitted query
-if st.session_state.submitted_query:
+to_query = st.session_state.submitted_query
+if to_query:
     with st.spinner("Thinking..."):
-        result = qa_chain({"query": st.session_state.submitted_query})
-        formatted = format_response(result["result"], st.session_state.submitted_query)
+        result = qa_chain({"query": to_query})
+        formatted = format_response(result["result"], to_query)
         st.session_state.history.append({
-            "q": st.session_state.submitted_query,
+            "q": to_query,
             "a": formatted,
             "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "sources": result.get("source_documents", [])
         })
+    # Clear and rerun to display new response
     st.session_state.submitted_query = ""
+    st.experimental_rerun()
 
 # Page header
 st.success(f"Logged in as: {st.session_state.email}")
