@@ -167,17 +167,8 @@ with col_submit:
         key="query_input_box",
         placeholder="e.g., How do I give feedback to an avoidant employee?"
     )
-    if st.button("Submit"):
-        if query_input and (not st.session_state.history or query_input != st.session_state.history[-1]["q"]):
-            st.session_state.submitted_query = query_input
-
-with col_clear:
-    if st.button("Clear Response History"):
-        st.session_state.history = []
-if st.button("Submit"):
-    if query_input and (not st.session_state.history or query_input != st.session_state.history[-1]["q"]):
-        st.session_state.submitted_query = query_input
-
+    with col_clear:
+    
     
 
     chat_container = st.container()
