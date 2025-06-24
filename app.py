@@ -116,31 +116,15 @@ if st.session_state.authenticated:
         retriever = load_faiss_index().as_retriever(return_source_documents=True)
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
+    if "query" not in st.session_state:
+        st.session_state.query = ""
+    if "pending_query" not in st.session_state:
+        st.session_state.pending_query = False
+    if "history" not in st.session_state:
+        st.session_state.history = []
+
     st.markdown("""
         <style>
-        body, .main, .block-container {
-            margin-top: 0 !important;
-            padding-top: 0 !important;
-        }
-
-        html, body {
-            background-color: #1b2a41;
-            color: #ffffff;
-            margin: 0;
-            padding: 0;
-        }
-
-        .main {
-            background-color: #27374d;
-            color: #ffffff;
-            padding: 2rem;
-            padding-bottom: 6rem;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            max-width: 800px;
-            margin: auto;
-        }
-
         .chat-box {
             max-height: 400px;
             overflow-y: auto;
@@ -150,111 +134,23 @@ if st.session_state.authenticated:
             margin-bottom: 1rem;
             border: 1px solid #324a63;
         }
-
-        .chat-entry {
-            margin-bottom: 1.5rem;
-        }
-
-        .chat-question {
-            font-weight: bold;
-            margin-bottom: 0.25rem;
-            color: #ffffff;
-        }
-
-        .chat-response {
-            color: #dddddd;
-            white-space: pre-wrap;
-        }
-
-        .question-buttons {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .button-wrapper {
-            width: 100%;
-            display: flex;
-            justify-content: center;
-        }
-
-        .centered-button {
-            display: flex;
-            justify-content: center;
-        }
-
-        .stTextInput > div > div > input {
-            background-color: #324a63;
-            color: #ffffff;
-            font-size: 1.3rem;
-            padding: 0.75rem;
-            border-radius: 6px;
-            border: none;
-        }
-
-        .stSpinner {
-            color: #ffffff !important;
-        }
-
-        h1, h2, h3, h4 {
-            color: #ffffff;
-        }
-
-        header, .block-container:has(header), .css-1avcm0n.ezrtsby2 {
-            display: none !important;
-            height: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-
-        footer {
-            visibility: hidden;
-        }
-
-        div.stButton {
-            display: flex;
-            justify-content: center;
-        }
-
-        div.stButton > button {
-            white-space: nowrap;
-            width: auto !important;
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-            background-color: #324a63;
-            color: white;
-            border: none;
-            border-radius: 6px;
-        }
-
-        .footer-logo {
-            text-align: center;
-            margin-top: 2rem;
-        }
-
-        .footer-logo img {
-            width: 150px;
-            opacity: 0.8;
-        }
+        .chat-entry { margin-bottom: 1.5rem; }
+        .chat-question { font-weight: bold; color: #fff; }
+        .chat-response { color: #ddd; white-space: pre-wrap; }
         </style>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="display: flex; align-items: center; margin-bottom: 1rem;">
-        <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo" style="height: 50px; margin-right: 10px;">
-        <h2 style="color: white; margin: 0;">Employee Management Assistant</h2>
+    <div style=\"display: flex; align-items: center; margin-bottom: 1rem;\">
+        <img src=\"https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png\" alt=\"Logo\" style=\"height: 50px; margin-right: 10px;\">
+        <h2 style=\"color: white; margin: 0;\">Employee Management Assistant</h2>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("I am an agent that is designed to help you with understanding how to better motivate the members of your teams and your direct reports.")
-    st.markdown("The language we use can directly affect how people respond to us.  Mastering this allows us to create more productive teams that meet and exceed deadlines, produce quality and have lower levels of passive push-back.")
+    st.markdown("The language we use can directly affect how people respond to us. Mastering this allows us to create more productive teams.")
 
-    # === Sample questions section (now above input) ===
     with st.expander("Some sample questions to get you started", expanded=False):
-        st.markdown('<div class="question-buttons">', unsafe_allow_html=True)
-
         example_questions = [
             "How can I figure out what type of person I am dealing with?",
             "How do I motivate someone with an anxious attachment style?",
@@ -262,38 +158,20 @@ if st.session_state.authenticated:
             "How can I deliver bad news without making someone shut down?",
             "What should I say when an employee takes credit for others' work?"
         ]
-
         for i, q in enumerate(example_questions):
-            st.markdown('<div class="button-wrapper">', unsafe_allow_html=True)
             if st.button(q, key=f"example_{i}"):
                 st.session_state.query = q
-            st.markdown('</div>', unsafe_allow_html=True)
+                st.session_state.pending_query = True
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    if "query" not in st.session_state:
-        st.session_state.query = ""
-
-    if "history" not in st.session_state:
-        st.session_state.history = []
-
-    # Make sure the flag exists
-    if "pending_query" not in st.session_state:
-        st.session_state.pending_query = False
-
-    # Handle input
     user_input = st.text_input(
         "Talk to me about what you are having trouble with",
-        value=st.session_state.query,
         placeholder="e.g., How do I give feedback to an avoidant employee?"
     )
 
-    # Set query and flag if it's a new input
-    if user_input and (not st.session_state.history or user_input != st.session_state.history[-1]["q"]):
+    if user_input and user_input != st.session_state.query:
         st.session_state.query = user_input
         st.session_state.pending_query = True
 
-    # Display chat history
     chat_container = st.container()
     with chat_container:
         st.markdown('<div class="chat-box">', unsafe_allow_html=True)
@@ -304,7 +182,6 @@ if st.session_state.authenticated:
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Auto-scroll to latest response
         components.html(
             """
             <script>
@@ -318,8 +195,7 @@ if st.session_state.authenticated:
             scrolling=False
         )
 
-    # Only respond if pending_query is True
-    if st.session_state.query and qa_chain and st.session_state.pending_query:
+    if qa_chain and st.session_state.pending_query and st.session_state.query:
         with st.spinner("Thinking..."):
             result = qa_chain({"query": st.session_state.query})
             base_answer = result["result"]
@@ -331,16 +207,12 @@ if st.session_state.authenticated:
                 "t": timestamp,
                 "sources": result.get("source_documents", [])
             })
-        # Clear flags to avoid infinite loop
         st.session_state.query = ""
         st.session_state.pending_query = False
         st.rerun()
 
-    # Centered Clear History button
-    st.markdown('<div class="centered-button">', unsafe_allow_html=True)
     if st.button("Clear Response History"):
         st.session_state.history = []
-    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("""
     <div class="footer-logo">
