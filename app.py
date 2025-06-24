@@ -243,9 +243,27 @@ if st.session_state.authenticated:
             ''', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with st.expander("Questions to get you started", expanded=False):
-        st.markdown('<div class="question-buttons">', unsafe_allow_html=True)
+    # === Display Chat History Area First ===
+    st.markdown("### 🧠 Chat Responses")
+    st.markdown(
+        """
+        <div style='max-height: 400px; overflow-y: auto; padding: 1rem; background-color: #324a63; border-radius: 10px; margin-bottom: 1.5rem;'>
+        """, unsafe_allow_html=True)
 
+    if "history" in st.session_state and st.session_state.history:
+        for entry in reversed(st.session_state.history):
+            st.markdown(f"**Q ({entry['t']}):** {entry['q']}")
+            st.markdown(entry['a'])
+            if entry.get("sources"):
+                st.markdown("**Sources:**")
+                for doc in entry["sources"]:
+                    st.markdown(f"- {doc.metadata.get('source', 'Unknown')}")
+            st.markdown("---")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # === Sample Questions in Expander ===
+    with st.expander("Questions to get you started", expanded=False):
         example_questions = [
             "How can I figure out what type of person I am dealing with?",
             "How do I motivate someone with an anxious attachment style?",
@@ -255,13 +273,10 @@ if st.session_state.authenticated:
         ]
 
         for i, q in enumerate(example_questions):
-            st.markdown('<div class="button-wrapper">', unsafe_allow_html=True)
             if st.button(q, key=f"example_{i}"):
                 st.session_state.query = q
-            st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
+    # === Input & Clear Button Centered ===
     if "query" not in st.session_state:
         st.session_state.query = ""
 
