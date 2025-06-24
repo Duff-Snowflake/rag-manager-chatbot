@@ -50,7 +50,6 @@ else:
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-
 if "email" not in st.session_state:
     st.session_state.email = ""
 
@@ -118,8 +117,8 @@ if st.session_state.authenticated:
 
     if "query" not in st.session_state:
         st.session_state.query = ""
-    if "pending_query" not in st.session_state:
-        st.session_state.pending_query = False
+    if "submitted_query" not in st.session_state:
+        st.session_state.submitted_query = ""
     if "history" not in st.session_state:
         st.session_state.history = []
 
@@ -160,17 +159,17 @@ if st.session_state.authenticated:
         ]
         for i, q in enumerate(example_questions):
             if st.button(q, key=f"example_{i}"):
-                st.session_state.query = q
-                st.session_state.pending_query = True
+                st.session_state.submitted_query = q
+                st.rerun()
 
-    user_input = st.text_input(
+    query_input = st.text_input(
         "Talk to me about what you are having trouble with",
         placeholder="e.g., How do I give feedback to an avoidant employee?"
     )
 
-    if user_input and user_input != st.session_state.query:
-        st.session_state.query = user_input
-        st.session_state.pending_query = True
+    if query_input and (not st.session_state.history or query_input != st.session_state.history[-1]["q"]):
+        st.session_state.submitted_query = query_input
+        st.rerun()
 
     chat_container = st.container()
     with chat_container:
@@ -181,7 +180,6 @@ if st.session_state.authenticated:
             st.markdown(f'<div class="chat-response">{entry["a"]}</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
-
         components.html(
             """
             <script>
@@ -195,20 +193,20 @@ if st.session_state.authenticated:
             scrolling=False
         )
 
-    if qa_chain and st.session_state.pending_query and st.session_state.query:
+    if qa_chain and st.session_state.submitted_query:
+        query = st.session_state.submitted_query
         with st.spinner("Thinking..."):
-            result = qa_chain({"query": st.session_state.query})
+            result = qa_chain({"query": query})
             base_answer = result["result"]
-            formatted = format_response(base_answer, st.session_state.query)
+            formatted = format_response(base_answer, query)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             st.session_state.history.append({
-                "q": st.session_state.query,
+                "q": query,
                 "a": formatted,
                 "t": timestamp,
                 "sources": result.get("source_documents", [])
             })
-        st.session_state.query = ""
-        st.session_state.pending_query = False
+        st.session_state.submitted_query = ""
         st.rerun()
 
     if st.button("Clear Response History"):
