@@ -277,18 +277,23 @@ if st.session_state.authenticated:
     if "history" not in st.session_state:
         st.session_state.history = []
 
+    # Make sure the flag exists
+    if "pending_query" not in st.session_state:
+        st.session_state.pending_query = False
+
+    # Handle input
     user_input = st.text_input(
         "Talk to me about what you are having trouble with",
         value=st.session_state.query,
         placeholder="e.g., How do I give feedback to an avoidant employee?"
     )
-    st.session_state.query = user_input
 
-    # Only update the query if it's different from last submitted one
+    # Set query and flag if it's a new input
     if user_input and (not st.session_state.history or user_input != st.session_state.history[-1]["q"]):
         st.session_state.query = user_input
         st.session_state.pending_query = True
 
+    # Display chat history
     chat_container = st.container()
     with chat_container:
         st.markdown('<div class="chat-box">', unsafe_allow_html=True)
@@ -313,7 +318,8 @@ if st.session_state.authenticated:
             scrolling=False
         )
 
-    if st.session_state.query and qa_chain:
+    # Only respond if pending_query is True
+    if st.session_state.query and qa_chain and st.session_state.pending_query:
         with st.spinner("Thinking..."):
             result = qa_chain({"query": st.session_state.query})
             base_answer = result["result"]
@@ -324,7 +330,9 @@ if st.session_state.authenticated:
                 "a": formatted,
                 "t": timestamp,
                 "sources": result.get("source_documents", [])
-        })
+            })
+        # Clear flags to avoid infinite loop
+        st.session_state.query = ""
         st.session_state.pending_query = False
         st.rerun()
 
