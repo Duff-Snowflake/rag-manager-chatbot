@@ -52,6 +52,27 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "email" not in st.session_state:
     st.session_state.email = ""
+if "submitted_query" not in st.session_state:
+    st.session_state.submitted_query = ""
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# Process submitted query before UI renders
+if "submitted_query" in st.session_state and st.session_state.submitted_query and qa_chain:
+    query = st.session_state.submitted_query
+    st.session_state.submitted_query = ""  # Clear early to prevent loops
+    with st.spinner("Thinking..."):
+        result = qa_chain({"query": query})
+        base_answer = result["result"]
+        formatted = format_response(base_answer, query)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state.history.append({
+            "q": query,
+            "a": formatted,
+            "t": timestamp,
+            "sources": result.get("source_documents", [])
+        })
+    st.rerun()
 
 if not st.session_state.authenticated:
     st.markdown("### Understanding and motivating your teams")
@@ -115,11 +136,6 @@ if st.session_state.authenticated:
         retriever = load_faiss_index().as_retriever(return_source_documents=True)
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
-    if "submitted_query" not in st.session_state:
-        st.session_state.submitted_query = ""
-    if "history" not in st.session_state:
-        st.session_state.history = []
-
     st.markdown("""
         <style>
         .chat-box {
@@ -161,15 +177,19 @@ if st.session_state.authenticated:
 
     col_submit, col_clear = st.columns([1, 1])
 
-with col_submit:
-    query_input = st.text_input(
-        "Talk to me about what you are having trouble with",
-        key="query_input_box",
-        placeholder="e.g., How do I give feedback to an avoidant employee?"
-    )
+    with col_submit:
+        query_input = st.text_input(
+            "Talk to me about what you are having trouble with",
+            key="query_input_box",
+            placeholder="e.g., How do I give feedback to an avoidant employee?"
+        )
+        if st.button("Submit", key="submit_button"):
+            if query_input and (not st.session_state.history or query_input != st.session_state.history[-1]["q"]):
+                st.session_state.submitted_query = query_input
+
     with col_clear:
-    
-    
+        if st.button("Clear Response History", key="clear_button"):
+            st.session_state.history = []
 
     chat_container = st.container()
     with chat_container:
@@ -192,25 +212,6 @@ with col_submit:
             height=0,
             scrolling=False
         )
-
-    if qa_chain and st.session_state.submitted_query:
-        query = st.session_state.submitted_query
-        with st.spinner("Thinking..."):
-            result = qa_chain({"query": query})
-            base_answer = result["result"]
-            formatted = format_response(base_answer, query)
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.session_state.history.append({
-                "q": query,
-                "a": formatted,
-                "t": timestamp,
-                "sources": result.get("source_documents", [])
-            })
-        st.session_state.submitted_query = ""
-        st.rerun()
-
-    if st.button("Clear Response History"):
-        st.session_state.history = []
 
     st.markdown("""
     <div class="footer-logo">
