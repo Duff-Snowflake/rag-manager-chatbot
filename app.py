@@ -25,9 +25,11 @@ ANSWER: {base_answer}
 Respond as if you're speaking directly to the manager in a conversational, coaching style.
 
 1. Begin with a short, encouraging summary of your interpretation of their situation and your high-level advice — spoken as if you're in a 1-on-1 session.
-2. Then, naturally introduce 6 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
-3. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
-4. Write the full response as markdown, in a voice that feels like a warm, confident expert guiding someone through a challenge.
+2. Do not start your encouraging summary of your interpretation of their situation with "Absolutely".
+3. Generate a title that reads "Example Language to Use".
+4. Then, naturally introduce 6 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
+5. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
+6. Write the full response as markdown, in a voice that feels like a warm, confident expert guiding someone through a challenge.
 
 Avoid repeating the query or answer unless it's helpful to reframe. Be clear, empathetic, and concrete.
 """
@@ -52,6 +54,8 @@ for key, default in {
 if not st.session_state.authenticated:
     st.markdown("### Understanding and motivating your teams")
     st.markdown("##### Personality types and how to get the most out of them")
+    st.markdown("The types of people in our workplaces are more varied now than ever.  More people than ever are more sensitive to criticism and need more encouragement in order to maintain engaement and productivity.  This app is your coach to understanding these new needs and eing able to leverage your teams, just by learning how to talk to different people.")
+
     email_input = st.text_input("Enter your email to access the assistant:", max_chars=100)
     if email_input:
         st.session_state.email = email_input
@@ -91,11 +95,6 @@ if not st.session_state.authenticated:
         st.stop()
 
     st.stop()  # Still needed to avoid running the rest of the app when unauthenticated
-
-# DELETE AFTER TEST - Authenticated: initialize retriever & QA chain
-# if 'retriever' not in globals() or retriever is None:
-#     retriever = load_faiss_index().as_retriever(return_source_documents=True)
-#     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
 
 try:
     retriever = load_faiss_index().as_retriever(return_source_documents=True)
@@ -146,14 +145,15 @@ st.markdown("""
   <h2 style='color:white; margin:0;'>Employee Management Assistant</h2>
 </div>
 """, unsafe_allow_html=True)
-st.markdown("Master language that motivates your team—coaching grounded in attachment theory.")
+st.markdown("##### Master language that motivates your team—coaching grounded in attachment theory.")
 
 # Sample questions
 with st.expander("Sample questions to get you started", expanded=False):
     for i, q in enumerate([
-        "How do I motivate an anxious attachment?",
-        "How to give feedback to an avoidant employee?", 
-        "Deliver bad news without shutting someone down?"
+        "How do I motivate an anxious type?",
+        "How do I motivate an avoidant type?",
+        "How to give feedback to an employee who dodges accountablity?", 
+        "How do I deliver bad news without shutting someone down?"
     ]):
         if st.button(q, key=f"example_{i}"):
             st.session_state.submitted_query = q
