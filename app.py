@@ -95,6 +95,14 @@ if not st.session_state.authenticated:
 
 # Authenticated users skip the block above and app continues below
 
+# Initialize retriever and QA chain
+try:
+    retriever = load_faiss_index().as_retriever(return_source_documents=True)
+    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
+except Exception as e:
+    st.error(f"Error loading FAISS index or setting up RetrievalQA: {e}")
+    st.stop()
+
 # Process any new submitted query
 to_query = st.session_state.submitted_query
 if to_query:
