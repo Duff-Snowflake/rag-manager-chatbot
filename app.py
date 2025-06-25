@@ -160,11 +160,18 @@ with st.expander("Sample questions to get you started", expanded=False):
             st.session_state.submitted_query = q
 
 # Input and action buttons
-with st.form(key="query_form"):
-    inp = st.text_input("Your question:", key="query_input_box", placeholder="Type your question and press Submit")
+# with st.form(key="query_form"):
+#     inp = st.text_input("Your question:", key="query_input_box", placeholder="Type your question and press Submit")
+#     submitted = st.form_submit_button("Submit")
+#     if submitted and inp:
+#         st.session_state.submitted_query = inp
+
+with st.form("query_form"):
+    query = st.text_input("Your question:", placeholder="Type your question and press Enter or Submit")
     submitted = st.form_submit_button("Submit")
-    if submitted and inp:
-        st.session_state.submitted_query = inp
+    if submitted and query.strip():
+        st.session_state.submitted_query = query.strip()
+
 
 col1, col2 = st.columns([3, 1])
 with col2:
