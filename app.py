@@ -27,7 +27,7 @@ Respond as if you're speaking directly to the manager in a conversational, coach
 1. Begin with a short, encouraging summary of your interpretation of their situation and your high-level advice — spoken as if you're in a 1-on-1 session.
 2. Do not start your encouraging summary of your interpretation of their situation with "Absolutely".
 3. Generate a title that reads "Example Language to Use".
-4. Then, naturally introduce 6 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
+4. Then, naturally introduce 4 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
 5. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
 6. Write the full response as markdown, in a voice that feels like a warm, confident expert guiding someone through a challenge.
 
@@ -146,7 +146,7 @@ st.markdown("""
   <h2 style='color:white; margin:0;'>Employee Management Assistant</h2>
 </div>
 """, unsafe_allow_html=True)
-st.markdown("##### Master language that motivates your team—coaching grounded in attachment theory.")
+st.markdown("##### Master language that motivates your team. Learn to use coaching strategies grounded in attachment theory.")
 
 # Sample questions
 with st.expander("Sample questions to get you started", expanded=False):
@@ -172,10 +172,26 @@ with col2:
         st.session_state.history = []
 
 # Chat history display
+# st.markdown('<div class="chat-box">', unsafe_allow_html=True)
+# for entry in reversed(st.session_state.history):
+#     st.markdown(f'<div class="chat-entry"><div class="chat-question"> {entry["q"]}</div><div class="chat-response">{entry["a"]}</div></div>', unsafe_allow_html=True)
+# st.markdown('</div>', unsafe_allow_html=True)
+
 st.markdown('<div class="chat-box">', unsafe_allow_html=True)
-for entry in st.session_state.history:
-    st.markdown(f'<div class="chat-entry"><div class="chat-question">👤 {entry["q"]}</div><div class="chat-response">{entry["a"]}</div></div>', unsafe_allow_html=True)
+
+for i, entry in enumerate(reversed(st.session_state.history)):
+    if i > 0:
+        st.markdown('<hr style="border:0; border-top:1px solid #324a63; margin:1rem 0;">', unsafe_allow_html=True)
+    st.markdown(f'''
+        <div class="chat-entry">
+            <div class="chat-question">👤 {entry["q"]}</div>
+            <div class="chat-response">{entry["a"]}</div>
+        </div>
+    ''', unsafe_allow_html=True)
+
 st.markdown('</div>', unsafe_allow_html=True)
+
+
 components.html("""
 <script>
 const chatBox = window.parent.document.querySelector('.chat-box');
