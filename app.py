@@ -50,11 +50,13 @@ for key, default in {
     if key not in st.session_state:
         st.session_state[key] = default
 
+
+
 # Authentication UI
 if not st.session_state.authenticated:
     st.markdown("### Understanding and motivating your teams")
     st.markdown("##### Personality types and how to get the most out of them")
-    st.markdown("The types of people in our workplaces are more varied now than ever.  More people than ever are more sensitive to criticism and need more encouragement in order to maintain engaement and productivity.  This app is your coach to understanding these new needs and eing able to leverage your teams, just by learning how to talk to different people.")
+    st.markdown("The types of people in our workplaces are more varied now than ever. More people than ever are more sensitive to criticism and need more encouragement in order to maintain engagement and productivity. This app is your coach to understanding these new needs and being able to leverage your teams, just by learning how to talk to different people.")
 
     email_input = st.text_input("Enter your email to access the assistant:", max_chars=100)
     if email_input:
@@ -89,19 +91,9 @@ if not st.session_state.authenticated:
             st.success(f"Access granted until {datetime.fromisoformat(expiry).date()}")
             st.session_state.authenticated = True
 
-    # 🔄 Instead of st.rerun(), stop the script here to trigger normal rerun on next interaction
-    if st.session_state.authenticated:
-        st.info("You're now logged in. You can scroll down and start using the assistant.")
-        st.stop()
+    st.stop()  # Always stop after login screen
 
-    st.stop()  # Still needed to avoid running the rest of the app when unauthenticated
-
-try:
-    retriever = load_faiss_index().as_retriever(return_source_documents=True)
-    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
-except Exception as e:
-    st.error(f"Error loading FAISS index or setting up RetrievalQA: {e}")
-    st.stop()
+# Authenticated users skip the block above and app continues below
 
 # Process any new submitted query
 to_query = st.session_state.submitted_query
