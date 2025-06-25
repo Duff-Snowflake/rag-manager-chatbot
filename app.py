@@ -55,6 +55,7 @@ if not st.session_state.authenticated:
     email_input = st.text_input("Enter your email to access the assistant:", max_chars=100)
     if email_input:
         st.session_state.email = email_input
+
     if st.session_state.email == UNRESTRICTED_EMAIL:
         pwd = st.text_input("Admin password:", type="password")
         if pwd == REQUIRED_PASSWORD:
@@ -70,25 +71,38 @@ if not st.session_state.authenticated:
                 db = json.load(f)
         except FileNotFoundError:
             pass
+
         expiry = db.get(st.session_state.email)
         if not expiry:
             db[st.session_state.email] = (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat()
             with open("user_access.json", "w") as f:
                 json.dump(db, f)
             expiry = db[st.session_state.email]
+
         if datetime.now() > datetime.fromisoformat(expiry):
             st.error("❌ Trial expired. Contact us to extend access.")
         else:
             st.success(f"Access granted until {datetime.fromisoformat(expiry).date()}")
             st.session_state.authenticated = True
-    if st.session_state.authenticated:
-        st.rerun()
-    st.stop()
 
-# Authenticated: initialize retriever & QA chain
-if 'retriever' not in globals() or retriever is None:
+    # 🔄 Instead of st.rerun(), stop the script here to trigger normal rerun on next interaction
+    if st.session_state.authenticated:
+        st.info("You're now logged in. You can scroll down and start using the assistant.")
+        st.stop()
+
+    st.stop()  # Still needed to avoid running the rest of the app when unauthenticated
+
+# DELETE AFTER TEST - Authenticated: initialize retriever & QA chain
+# if 'retriever' not in globals() or retriever is None:
+#     retriever = load_faiss_index().as_retriever(return_source_documents=True)
+#     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
+
+try:
     retriever = load_faiss_index().as_retriever(return_source_documents=True)
     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
+except Exception as e:
+    st.error(f"Error loading FAISS index or setting up RetrievalQA: {e}")
+    st.stop()
 
 # Process any new submitted query
 to_query = st.session_state.submitted_query
