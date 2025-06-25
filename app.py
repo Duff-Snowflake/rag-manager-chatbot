@@ -159,12 +159,14 @@ with st.expander("Sample questions to get you started", expanded=False):
             st.session_state.submitted_query = q
 
 # Input and action buttons
-col_submit, col_clear = st.columns([3,1])
-with col_submit:
+with st.form(key="query_form"):
     inp = st.text_input("Your question:", key="query_input_box", placeholder="Type your question and press Submit")
-    if st.button("Submit", key="submit_button") and inp:
+    submitted = st.form_submit_button("Submit")
+    if submitted and inp:
         st.session_state.submitted_query = inp
-with col_clear:
+
+col1, col2 = st.columns([3, 1])
+with col2:
     if st.button("Clear History", key="clear_button"):
         st.session_state.history = []
 
