@@ -91,7 +91,8 @@ if not st.session_state.authenticated:
             st.success(f"Access granted until {datetime.fromisoformat(expiry).date()}")
             st.session_state.authenticated = True
 
-    st.stop()  # Always stop after login screen
+    if not st.session_state.authenticated:
+        st.stop()
 
 # Authenticated users skip the block above and app continues below
 
