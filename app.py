@@ -118,7 +118,7 @@ if to_query:
         })
     st.session_state.submitted_query = ""
     st.success("Response added. Scroll down to view it.")
-    st.stop()  # ← safely stop here to avoid race conditions
+    # st.stop()  # ← safely stop here to avoid race conditions
 
 # Page header
 st.success(f"Logged in as: {st.session_state.email}")
