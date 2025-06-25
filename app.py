@@ -110,7 +110,7 @@ if to_query:
     with st.spinner("Thinking..."):
         result = qa_chain({"query": to_query})
         formatted = format_response(result["result"], to_query)
-        st.session_state.history.append({
+        st.session_state.history.insert(0, {
             "q": to_query,
             "a": formatted,
             "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -179,7 +179,7 @@ with col2:
 
 st.markdown('<div class="chat-box">', unsafe_allow_html=True)
 
-for i, entry in enumerate(reversed(st.session_state.history)):
+for i, entry in enumerate(st.session_state.history):
     if i > 0:
         st.markdown('<hr style="border:0; border-top:1px solid #324a63; margin:1rem 0;">', unsafe_allow_html=True)
     st.markdown(f'''
