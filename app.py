@@ -57,13 +57,13 @@ body { background-color: #343541; color: white; }
 
 /* Container styling */
 .chat-box {
-    max-height: 600px;
+    max-height: 400px;  /* Adjust height as needed */
     overflow-y: auto;
     padding: 1rem;
     border-radius: 10px;
     margin-bottom: 1rem;
-    border: none;
-    background: transparent;
+    background: #343541;
+    border: 1px solid #565869;
 }
 
 /* Individual message entry */
@@ -192,6 +192,17 @@ if st.button("Logout", key="logout"):
     st.session_state.email = ""
     st.experimental_rerun()
 
+# Sample questions
+with st.expander("Sample questions to get you started", expanded=False):
+    for i, q in enumerate([
+        "How do I motivate an anxious type?",
+        "How do I motivate an avoidant type?",
+        "How to give feedback to an employee who dodges accountability?", 
+        "How do I deliver bad news without shutting someone down?"
+    ]):
+        if st.button(q, key=f"example_{i}"):
+            st.session_state.submitted_query = q
+
 # Chat history display
 st.markdown('<div class="chat-box">', unsafe_allow_html=True)
 
@@ -204,17 +215,6 @@ for i, entry in enumerate(st.session_state.history):
     ''', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
-
-# Sample questions
-with st.expander("Sample questions to get you started", expanded=False):
-    for i, q in enumerate([
-        "How do I motivate an anxious type?",
-        "How do I motivate an avoidant type?",
-        "How to give feedback to an employee who dodges accountability?", 
-        "How do I deliver bad news without shutting someone down?"
-    ]):
-        if st.button(q, key=f"example_{i}"):
-            st.session_state.submitted_query = q
 
 # Input form at bottom
 with st.form("query_form"):
