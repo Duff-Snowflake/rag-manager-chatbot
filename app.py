@@ -90,6 +90,17 @@ body { background-color: #343541; color: white; margin-top: 80px; }
     flex-direction: column;
     gap: 0.5rem;
 }
+            
+.chat-box {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    background: #2f3136;
+    border: 1px solid #565869;
+}
+
 .chat-question {
     align-self: flex-end;
     background-color: #40414f;
@@ -99,6 +110,7 @@ body { background-color: #343541; color: white; margin-top: 80px; }
     max-width: 80%;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
+            
 .chat-response {
     align-self: flex-start;
     background-color: #444654;
@@ -114,7 +126,7 @@ body { background-color: #343541; color: white; margin-top: 80px; }
 
 <div class="top-banner">
   <div style="display: flex; align-items: center;">
-    <img src="https://via.placeholder.com/30" alt="Logo">
+    <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo">
     <strong>Employee Management Assistant</strong>
   </div>
   <div class="status">
@@ -189,6 +201,8 @@ if to_query:
 
 # Conversation area (oldest at top, newest at bottom)
 if st.session_state.history:
+    st.markdown('<div class="chat-box">', unsafe_allow_html=True)
+
     for entry in st.session_state.history:
         st.markdown(f'''
             <div class="chat-entry">
@@ -196,6 +210,8 @@ if st.session_state.history:
                 <div class="chat-response">{entry["a"]}</div>
             </div>
         ''', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Bottom interaction area
 if st.button("Logout", key="logout"):
