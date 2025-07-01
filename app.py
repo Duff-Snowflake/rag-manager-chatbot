@@ -96,8 +96,23 @@ body { background-color: #343541; color: white; }
     max-width: 80%;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     white-space: pre-wrap;
+    line-height: 1.6;  /* Adjust to your preferred spacing */
 }
 
+/* Format numbered lists for tight spacing */
+.chat-response ol {
+    padding-left: 1.2rem;  /* Adjust left indent of ordered list */
+}
+
+.chat-response ol li {
+    margin-bottom: 0.3rem; /* Reduce spacing between numbered items */
+}
+
+/* Tighten suggestion and explanation spacing if using paragraphs */
+.chat-response p {
+    margin-bottom: 0.3rem;
+}
+            
 /* Input field styling */
 input[type="text"] {
     border-radius: 8px !important;
