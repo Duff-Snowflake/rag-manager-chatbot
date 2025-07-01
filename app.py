@@ -59,17 +59,6 @@ st.markdown("""
 <style>
 body { background-color: #343541; color: white; }
 
-/* Container styling */
-.chat-box {
-    height: 400px;  /* Adjust height as needed */
-    overflow-y: auto;
-    padding: 1rem;
-    border-radius: 10px;
-    margin-bottom: 1rem;
-    background: #2f3136;
-    border: 1px solid #565869;
-}
-
 /* Individual message entry */
 .chat-entry {
     margin-bottom: 1.5rem;
@@ -237,10 +226,8 @@ with st.expander("Sample questions to get you started", expanded=False):
         if st.button(q, key=f"example_{i}"):
             st.session_state.submitted_query = q
 
-# Chat history display ONLY if there are entries
+# Chat history display WITHOUT container box
 if st.session_state.history:
-    st.markdown('<div class="chat-box">', unsafe_allow_html=True)
-
     for i, entry in enumerate(st.session_state.history):
         st.markdown(f'''
             <div class="chat-entry">
