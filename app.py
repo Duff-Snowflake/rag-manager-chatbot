@@ -57,17 +57,39 @@ for key, default in {
 # Global CSS styling
 st.markdown("""
 <style>
-body { background-color: #343541; color: white; }
+body { background-color: #343541; color: white; margin-top: 80px; }
 
-/* Individual message entry */
+/* Top fixed banner */
+.top-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #202123;
+    color: white;
+    padding: 0.75rem 1rem;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #3f4147;
+}
+.top-banner img {
+    height: 30px;
+    margin-right: 10px;
+}
+.top-banner .status {
+    font-size: 0.85rem;
+    color: #b3b3b3;
+}
+
+/* Chat bubbles */
 .chat-entry {
     margin-bottom: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
 }
-
-/* User question bubble */
 .chat-question {
     align-self: flex-end;
     background-color: #40414f;
@@ -77,8 +99,6 @@ body { background-color: #343541; color: white; }
     max-width: 80%;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
-
-/* Assistant response bubble */
 .chat-response {
     align-self: flex-start;
     background-color: #444654;
@@ -88,58 +108,20 @@ body { background-color: #343541; color: white; }
     max-width: 80%;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     white-space: pre-wrap;
-    line-height: 1.6;  /* Adjust to your preferred spacing */
-}
-
-/* Format numbered lists for tight spacing */
-.chat-response ol {
-    padding-left: 1.2rem;  /* Adjust left indent of ordered list */
-}
-
-.chat-response ol li {
-    margin-bottom: 0.2rem;  /* Reduce vertical space */
-    line-height: 1.4;       /* Tighter line spacing within items */
-}
-
-/* Adjust paragraph spacing within items */
-.chat-response ol li p {
-    margin: 0.2rem 0 0.2rem 1.2rem;  /* Tight top/bottom, slight indent for explanations */
-}
-
-/* Adjust blockquote or nested list styles if used by LLM output */
-.chat-response blockquote, 
-.chat-response ul, 
-.chat-response ul li {
-    margin: 0.2rem 0;
-    padding-left: 1.2rem;
-}
-
-/* General paragraph spacing in chat-response */
-.chat-response p {
-    margin: 0.2rem 0;
-    line-height: 1.4;
-}
-                
-/* Input field styling */
-input[type="text"] {
-    border-radius: 8px !important;
-    padding: 0.75rem !important;
-    background-color: #40414f !important;
-    color: white !important;
-    border: 1px solid #565869 !important;
-}
-
-/* Button styling */
-button[kind="primary"] {
-    background-color: #40414f !important;
-    color: white !important;
-    border: none !important;
-}
-button[kind="primary"]:hover {
-    background-color: #4e4f5c !important;
+    line-height: 1.6;
 }
 </style>
-""", unsafe_allow_html=True)
+
+<div class="top-banner">
+  <div style="display: flex; align-items: center;">
+    <img src="https://via.placeholder.com/30" alt="Logo">
+    <strong>Employee Management Assistant</strong>
+  </div>
+  <div class="status">
+    Response added. Logged in as: {email}
+  </div>
+</div>
+""".replace("{email}", st.session_state.get("email","")), unsafe_allow_html=True)
 
 # Authentication UI
 if not st.session_state.authenticated:
@@ -183,8 +165,6 @@ if not st.session_state.authenticated:
     if not st.session_state.authenticated:
         st.stop()
 
-# Authenticated users skip the block above and app continues below
-
 # Initialize retriever and QA chain
 try:
     retriever = load_faiss_index().as_retriever(return_source_documents=True)
@@ -199,23 +179,30 @@ if to_query:
     with st.spinner("Thinking..."):
         result = qa_chain({"query": to_query})
         formatted = format_response(result["result"], to_query)
-        st.session_state.history.insert(0, {
+        st.session_state.history.append({
             "q": to_query,
             "a": formatted,
             "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "sources": result.get("source_documents", [])
         })
     st.session_state.submitted_query = ""
-    st.success("Response added. Scroll down to view it.")
 
-# Page header
-st.success(f"Logged in as: {st.session_state.email}")
+# Conversation area (oldest at top, newest at bottom)
+if st.session_state.history:
+    for entry in st.session_state.history:
+        st.markdown(f'''
+            <div class="chat-entry">
+                <div class="chat-question">{entry["q"]}</div>
+                <div class="chat-response">{entry["a"]}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+
+# Bottom interaction area
 if st.button("Logout", key="logout"):
     st.session_state.authenticated = False
     st.session_state.email = ""
     st.experimental_rerun()
 
-# Sample questions
 with st.expander("Sample questions to get you started", expanded=False):
     for i, q in enumerate([
         "How do I motivate an anxious type?",
@@ -226,19 +213,6 @@ with st.expander("Sample questions to get you started", expanded=False):
         if st.button(q, key=f"example_{i}"):
             st.session_state.submitted_query = q
 
-# Chat history display WITHOUT container box
-if st.session_state.history:
-    for i, entry in enumerate(st.session_state.history):
-        st.markdown(f'''
-            <div class="chat-entry">
-                <div class="chat-question">{entry["q"]}</div>
-                <div class="chat-response">{entry["a"]}</div>
-            </div>
-        ''', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Input form at bottom
 with st.form("query_form"):
     query = st.text_input("Your question:", placeholder="Type your question and press Enter or Submit")
     submitted = st.form_submit_button("Submit")
@@ -247,17 +221,3 @@ with st.form("query_form"):
 
 if st.button("Clear History", key="clear_button"):
     st.session_state.history = []
-
-components.html("""
-<script>
-const chatBox = window.parent.document.querySelector('.chat-box');
-if(chatBox){ chatBox.scrollTop = chatBox.scrollHeight; }
-</script>
-""", height=0)
-
-# Footer logo
-st.markdown("""
-<div style='text-align:center; margin-top:2rem;'>
-  <img src='https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png' alt='Brand' style='width:10px;'>
-</div>
-""", unsafe_allow_html=True)
