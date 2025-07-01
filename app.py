@@ -249,15 +249,15 @@ with st.expander("Sample questions to get you started", expanded=False):
 
 # Logout button
 if st.button("Logout", key="logout"):
-    st.session_state.authenticated = False
-    st.session_state.email = ""
-    st.session_state.history = []
+    for key in ["authenticated", "email", "history", "submitted_query"]:
+        if key in st.session_state:
+            del st.session_state[key]
     st.experimental_rerun()
 
 # Clear history button
 if st.button("Clear History", key="clear_button"):
     st.session_state.history = []
-    st.experimental_rerun()
+    st.write("History cleared. Please refresh if not updated.")
 
 # Bottom logo display
 st.markdown("""
