@@ -57,12 +57,12 @@ body { background-color: #343541; color: white; }
 
 /* Container styling */
 .chat-box {
-    max-height: 400px;  /* Adjust height as needed */
+    height: 400px;  /* Adjust height as needed */
     overflow-y: auto;
     padding: 1rem;
     border-radius: 10px;
     margin-bottom: 1rem;
-    background: #343541;
+    background: #2f3136;
     border: 1px solid #565869;
 }
 
@@ -206,13 +206,17 @@ with st.expander("Sample questions to get you started", expanded=False):
 # Chat history display
 st.markdown('<div class="chat-box">', unsafe_allow_html=True)
 
-for i, entry in enumerate(st.session_state.history):
-    st.markdown(f'''
-        <div class="chat-entry">
-            <div class="chat-question">{entry["q"]}</div>
-            <div class="chat-response">{entry["a"]}</div>
-        </div>
-    ''', unsafe_allow_html=True)
+# ✅ Added placeholder if no history
+if not st.session_state.history:
+    st.markdown('<div style="color: #888;">No conversation yet. Ask a question below!</div>', unsafe_allow_html=True)
+else:
+    for i, entry in enumerate(st.session_state.history):
+        st.markdown(f'''
+            <div class="chat-entry">
+                <div class="chat-question">{entry["q"]}</div>
+                <div class="chat-response">{entry["a"]}</div>
+            </div>
+        ''', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
