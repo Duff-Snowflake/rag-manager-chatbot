@@ -237,13 +237,10 @@ with st.expander("Sample questions to get you started", expanded=False):
         if st.button(q, key=f"example_{i}"):
             st.session_state.submitted_query = q
 
-# Chat history display
-st.markdown('<div class="chat-box">', unsafe_allow_html=True)
+# Chat history display ONLY if there are entries
+if st.session_state.history:
+    st.markdown('<div class="chat-box">', unsafe_allow_html=True)
 
-# ✅ Added placeholder if no history
-if not st.session_state.history:
-    st.markdown('<div style="color: #888;">No conversation yet. Ask a question below!</div>', unsafe_allow_html=True)
-else:
     for i, entry in enumerate(st.session_state.history):
         st.markdown(f'''
             <div class="chat-entry">
@@ -252,7 +249,7 @@ else:
             </div>
         ''', unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Input form at bottom
 with st.form("query_form"):
