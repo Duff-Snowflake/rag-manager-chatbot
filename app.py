@@ -26,11 +26,14 @@ ANSWER: {base_answer}
 Respond as if you're speaking directly to the manager in a conversational, coaching style.
 
 1. Begin with a short, encouraging summary of your interpretation of their situation and your high-level advice — spoken as if you're in a 1-on-1 session.
-2. Do not start your encouraging summary of your interpretation of their situation with "Absolutely".
-3. Then, naturally introduce 4 specific example phrases the manager could say in this situation that are spectful and direct. Use language appropriate to anxious or avoidant personalities. 
-4. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
-5. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
-6. Write the full response as markdown, in a voice that feels like a warm, confident expert helping someone understand differnent personlity types and how to motivate them.
+2. Do not start your encouraging summary with "Absolutely".
+3. Then, naturally introduce 4 specific example phrases the manager could say in this situation that are respectful and direct. Use language appropriate to anxious or avoidant personalities. For each phrase, format as:
+
+[Number]. "[Example phrase]" – [Short explanation why it works]
+
+Write them as a tight numbered list with minimal spacing between items.
+4. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
+5. Write the full response as markdown, in a voice that feels like a warm, confident expert helping someone understand different personality types and how to motivate them.
 
 Avoid repeating the query or answer unless it's helpful to reframe. Be clear, empathetic, and concrete.
 """
@@ -105,14 +108,29 @@ body { background-color: #343541; color: white; }
 }
 
 .chat-response ol li {
-    margin-bottom: 0.3rem; /* Reduce spacing between numbered items */
+    margin-bottom: 0.2rem;  /* Reduce vertical space */
+    line-height: 1.4;       /* Tighter line spacing within items */
 }
 
-/* Tighten suggestion and explanation spacing if using paragraphs */
-.chat-response p {
-    margin-bottom: 0.3rem;
+/* Adjust paragraph spacing within items */
+.chat-response ol li p {
+    margin: 0.2rem 0 0.2rem 1.2rem;  /* Tight top/bottom, slight indent for explanations */
 }
-            
+
+/* Adjust blockquote or nested list styles if used by LLM output */
+.chat-response blockquote, 
+.chat-response ul, 
+.chat-response ul li {
+    margin: 0.2rem 0;
+    padding-left: 1.2rem;
+}
+
+/* General paragraph spacing in chat-response */
+.chat-response p {
+    margin: 0.2rem 0;
+    line-height: 1.4;
+}
+                
 /* Input field styling */
 input[type="text"] {
     border-radius: 8px !important;
