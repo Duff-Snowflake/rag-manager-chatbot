@@ -1,5 +1,5 @@
 import streamlit as st
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="Employee Management Assistant", layout="centered")
 import streamlit.components.v1 as components
 from langchain_community.chat_models import ChatOpenAI
 from rag_pipeline import load_faiss_index
@@ -50,7 +50,73 @@ for key, default in {
     if key not in st.session_state:
         st.session_state[key] = default
 
+# Global CSS styling
+st.markdown("""
+<style>
+body { background-color: #343541; color: white; }
 
+/* Container styling */
+.chat-box {
+    max-height: 600px;
+    overflow-y: auto;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    border: none;
+    background: transparent;
+}
+
+/* Individual message entry */
+.chat-entry {
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* User question bubble */
+.chat-question {
+    align-self: flex-end;
+    background-color: #40414f;
+    color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    max-width: 80%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Assistant response bubble */
+.chat-response {
+    align-self: flex-start;
+    background-color: #444654;
+    color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    max-width: 80%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    white-space: pre-wrap;
+}
+
+/* Input field styling */
+input[type="text"] {
+    border-radius: 8px !important;
+    padding: 0.75rem !important;
+    background-color: #40414f !important;
+    color: white !important;
+    border: 1px solid #565869 !important;
+}
+
+/* Button styling */
+button[kind="primary"] {
+    background-color: #40414f !important;
+    color: white !important;
+    border: none !important;
+}
+button[kind="primary"]:hover {
+    background-color: #4e4f5c !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Authentication UI
 if not st.session_state.authenticated:
@@ -118,86 +184,47 @@ if to_query:
         })
     st.session_state.submitted_query = ""
     st.success("Response added. Scroll down to view it.")
-    # st.stop()  # ← safely stop here to avoid race conditions
 
 # Page header
 st.success(f"Logged in as: {st.session_state.email}")
-col1, col2, col3 = st.columns([5,2,2])
-with col3:
-    if st.button("Logout", key="logout"):
-        st.session_state.authenticated = False
-        st.session_state.email = ""
-        st.experimental_rerun()
-
-# Styling for chat
-st.markdown("""
-<style>
-.chat-box { max-height:600px; overflow-y:auto; background:#1e2e3f; padding:1rem; border-radius:8px; margin-bottom:1rem; border:1px solid #324a63; }
-.chat-entry { margin-bottom:1.5rem; }
-.chat-question { font-weight:bold; color:#fff; }
-.chat-response { color:#ddd; white-space:pre-wrap; }
-</style>
-""", unsafe_allow_html=True)
-
-# Title and description
-st.markdown("""
-<div style='display:flex; align-items:center; margin-bottom:1rem;'>
-  <img src='https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png' alt='Logo' style='height:50px; margin-right:10px;'>
-  <h2 style='color:white; margin:0;'>Employee Management Assistant</h2>
-</div>
-""", unsafe_allow_html=True)
-st.markdown("##### Master language that motivates your team. Learn to use coaching strategies grounded in attachment theory.")
-
-# Sample questions
-with st.expander("Sample questions to get you started", expanded=False):
-    for i, q in enumerate([
-        "How do I motivate an anxious type?",
-        "How do I motivate an avoidant type?",
-        "How to give feedback to an employee who dodges accountablity?", 
-        "How do I deliver bad news without shutting someone down?"
-    ]):
-        if st.button(q, key=f"example_{i}"):
-            st.session_state.submitted_query = q
-
-# Input and action buttons
-# with st.form(key="query_form"):
-#     inp = st.text_input("Your question:", key="query_input_box", placeholder="Type your question and press Submit")
-#     submitted = st.form_submit_button("Submit")
-#     if submitted and inp:
-#         st.session_state.submitted_query = inp
-
-with st.form("query_form"):
-    query = st.text_input("Your question:", placeholder="Type your question and press Enter or Submit")
-    submitted = st.form_submit_button("Submit")
-    if submitted and query.strip():
-        st.session_state.submitted_query = query.strip()
-
-
-col1, col2 = st.columns([3, 1])
-with col2:
-    if st.button("Clear History", key="clear_button"):
-        st.session_state.history = []
+if st.button("Logout", key="logout"):
+    st.session_state.authenticated = False
+    st.session_state.email = ""
+    st.experimental_rerun()
 
 # Chat history display
-# st.markdown('<div class="chat-box">', unsafe_allow_html=True)
-# for entry in reversed(st.session_state.history):
-#     st.markdown(f'<div class="chat-entry"><div class="chat-question"> {entry["q"]}</div><div class="chat-response">{entry["a"]}</div></div>', unsafe_allow_html=True)
-# st.markdown('</div>', unsafe_allow_html=True)
-
 st.markdown('<div class="chat-box">', unsafe_allow_html=True)
 
 for i, entry in enumerate(st.session_state.history):
-    if i > 0:
-        st.markdown('<hr style="border:0; border-top:1px solid #324a63; margin:1rem 0;">', unsafe_allow_html=True)
     st.markdown(f'''
         <div class="chat-entry">
-            <div class="chat-question">👤 {entry["q"]}</div>
+            <div class="chat-question">{entry["q"]}</div>
             <div class="chat-response">{entry["a"]}</div>
         </div>
     ''', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
+# Sample questions
+with st.expander("Sample questions to get you started", expanded=False):
+    for i, q in enumerate([
+        "How do I motivate an anxious type?",
+        "How do I motivate an avoidant type?",
+        "How to give feedback to an employee who dodges accountability?", 
+        "How do I deliver bad news without shutting someone down?"
+    ]):
+        if st.button(q, key=f"example_{i}"):
+            st.session_state.submitted_query = q
+
+# Input form at bottom
+with st.form("query_form"):
+    query = st.text_input("Your question:", placeholder="Type your question and press Enter or Submit")
+    submitted = st.form_submit_button("Submit")
+    if submitted and query.strip():
+        st.session_state.submitted_query = query.strip()
+
+if st.button("Clear History", key="clear_button"):
+    st.session_state.history = []
 
 components.html("""
 <script>
