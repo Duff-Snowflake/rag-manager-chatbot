@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(layout="wide")
 import streamlit.components.v1 as components
 from langchain_community.chat_models import ChatOpenAI
 from rag_pipeline import load_faiss_index
@@ -26,10 +27,9 @@ Respond as if you're speaking directly to the manager in a conversational, coach
 
 1. Begin with a short, encouraging summary of your interpretation of their situation and your high-level advice — spoken as if you're in a 1-on-1 session.
 2. Do not start your encouraging summary of your interpretation of their situation with "Absolutely".
-3. Generate a title that reads "Example Language to Use".
-4. Then, naturally introduce 4 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
-5. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
-6. Write the full response as markdown, in a voice that feels like a warm, confident expert guiding someone through a challenge.
+3. Then, naturally introduce 4 specific example phrases the manager could say in this situation. For each one, briefly explain *why* it works, grounded in psychological principles — but keep the tone human, not clinical.
+4. End with a short reflective question to prompt the manager to consider how they might apply these suggestions with their specific employee.
+5. Write the full response as markdown, in a voice that feels like a warm, confident expert guiding someone through a challenge.
 
 Avoid repeating the query or answer unless it's helpful to reframe. Be clear, empathetic, and concrete.
 """
@@ -132,7 +132,7 @@ with col3:
 # Styling for chat
 st.markdown("""
 <style>
-.chat-box { max-height:400px; overflow-y:auto; background:#1e2e3f; padding:1rem; border-radius:8px; margin-bottom:1rem; border:1px solid #324a63; }
+.chat-box { max-height:600px; overflow-y:auto; background:#1e2e3f; padding:1rem; border-radius:8px; margin-bottom:1rem; border:1px solid #324a63; }
 .chat-entry { margin-bottom:1.5rem; }
 .chat-question { font-weight:bold; color:#fff; }
 .chat-response { color:#ddd; white-space:pre-wrap; }
