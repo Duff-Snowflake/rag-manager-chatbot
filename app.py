@@ -46,6 +46,14 @@ UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
 REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
 ACCESS_DURATION_DAYS = 7
 
+# Initialize user_access database
+db = {}
+try:
+    with open("user_access.json", "r") as f:
+        db = json.load(f)
+except FileNotFoundError:
+    pass
+
 # Initialize Streamlit session state variables
 for key, default in {
     "authenticated": False,
@@ -145,6 +153,7 @@ if not st.session_state.authenticated:
     if email_input:
         st.session_state.email = email_input
 
+    # ✅ Admin login check first
     if st.session_state.email == UNRESTRICTED_EMAIL:
         pwd = st.text_input("Admin password:", type="password")
         if pwd == REQUIRED_PASSWORD:
@@ -152,14 +161,9 @@ if not st.session_state.authenticated:
             st.session_state.authenticated = True
         elif pwd:
             st.error("Incorrect password.")
-    elif st.session_state.email:
-        db = {}
-        try:
-            with open("user_access.json", "r") as f:
-                db = json.load(f)
-        except FileNotFoundError:
-            pass
 
+    # ✅ Trial user check
+    elif st.session_state.email:
         expiry = db.get(st.session_state.email)
         if not expiry:
             db[st.session_state.email] = (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat()
@@ -175,6 +179,49 @@ if not st.session_state.authenticated:
 
     if not st.session_state.authenticated:
         st.stop()
+
+# Retrieve user record (expiry + last_activity)
+user_record = db.get(st.session_state.email)
+
+# If user does not exist, create a new record with expiry and last_activity
+if not user_record:
+    user_record = {
+        "expiry": (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat(),
+        "last_activity": datetime.now().isoformat()
+    }
+    db[st.session_state.email] = user_record
+    with open("user_access.json", "w") as f:
+        json.dump(db, f)
+
+# Parse expiry and last activity timestamps
+expiry = datetime.fromisoformat(user_record["expiry"])
+last_activity = datetime.fromisoformat(user_record.get("last_activity", datetime.now().isoformat()))
+timeout_seconds = 600  # 10 minutes inactivity timeout
+
+# Check if trial has expired
+if datetime.now() > expiry:
+    st.error("❌ Trial expired. Contact us to extend access.")
+    st.session_state.authenticated = False
+
+# Check inactivity timeout
+elif (datetime.now() - last_activity).total_seconds() > timeout_seconds:
+    st.warning("🔒 Session expired due to inactivity. Please log in again.")
+    st.session_state.authenticated = False
+
+# Session is active and valid
+else:
+    st.success(f"Access granted until {expiry.date()}")
+    st.session_state.authenticated = True
+    # Update last_activity on any valid interaction
+    user_record["last_activity"] = datetime.now().isoformat()
+    db[st.session_state.email] = user_record
+    with open("user_access.json", "w") as f:
+        json.dump(db, f)
+
+# ✅ Stop the app if not authenticated after checks
+if not st.session_state.authenticated:
+    st.stop()
+
 
 # Define a strict QA prompt to enforce source-based answers only
 qa_prompt = PromptTemplate(
@@ -228,13 +275,18 @@ if submitted:
         with st.spinner("Thinking..."):
             result = qa_chain({"query": cleaned_query})
             formatted = format_response(result["result"], cleaned_query)
+            if "history" not in st.session_state:
+                st.session_state.history = []
             st.session_state.history.append({
                 "q": cleaned_query,
                 "a": formatted,
                 "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "sources": result.get("source_documents", [])
             })
-        st.experimental_rerun()
+        # Optionally rerun if needed for UI update, but test first
+        # st.experimental_rerun()
+    else:
+        st.warning("Please enter a valid question before submitting.")
 
 # Sample questions
 with st.expander("Sample questions to get you started", expanded=False):
@@ -257,7 +309,7 @@ if st.button("Logout", key="logout"):
 # Clear history button
 if st.button("Clear History", key="clear_button"):
     st.session_state.history = []
-    st.write("History cleared. Please refresh if not updated.")
+#    st.write("History cleared. Please refresh if not updated.")
 
 # Bottom logo display
 st.markdown("""
