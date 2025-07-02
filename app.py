@@ -159,6 +159,7 @@ if not st.session_state.authenticated:
         if pwd == REQUIRED_PASSWORD:
             st.success("Admin access granted.")
             st.session_state.authenticated = True
+            st.experimental_rerun()  # Ensures immediate rerun to render authenticated UI
         elif pwd:
             st.error("Incorrect password.")
 
@@ -176,6 +177,7 @@ if not st.session_state.authenticated:
         else:
             st.success(f"Access granted until {datetime.fromisoformat(expiry).date()}")
             st.session_state.authenticated = True
+            st.experimental_rerun()  # Optional: rerun here too if needed
 
     if not st.session_state.authenticated:
         st.stop()
