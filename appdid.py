@@ -84,7 +84,11 @@ if not st.session_state.authenticated:
             db[email] = expiry
             with open(db_path, "w") as f:
                 json.dump(db, f)
-        if datetime.now() > datetime.fromisoformat(expiry):
+        if isinstance(expiry, str):
+            expiry_dt = datetime.fromisoformat(expiry)
+        else:
+            expiry_dt = expiry
+        if datetime.now() > expiry_dt:
             st.error("Trial expired.")
             st.stop()
         else:
