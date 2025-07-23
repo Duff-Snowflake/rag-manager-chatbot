@@ -113,11 +113,17 @@ if not st.session_state.authenticated:
     if email:
         st.session_state.email = email
         if email == UNRESTRICTED_EMAIL:
-            pwd = st.text_input("Admin password:", type="password")
-            if pwd == REQUIRED_PASSWORD:
-                st.success("Admin access granted.")
-                st.session_state.authenticated = True
-                st.experimental_rerun()
+            with st.form("admin_login_form"):
+                pwd = st.text_input("Admin password:", type="password")
+                submitted = st.form_submit_button("Login")
+
+            if submitted:
+                if pwd == REQUIRED_PASSWORD:
+                    st.success("Admin access granted.")
+                    st.session_state.authenticated = True
+                    st.experimental_rerun()
+                else:
+                    st.error("Incorrect admin password.")
         else:
             authenticate_user(email)
 
