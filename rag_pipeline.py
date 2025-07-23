@@ -9,7 +9,10 @@ from pdf_chunker import parse_and_chunk_pdfs
 # Load environment
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-print("🛠️ Loaded key (first 10 chars):", OPENAI_API_KEY[:10])
+if OPENAI_API_KEY:
+    print("🛠️ Loaded key (first 10 chars):", OPENAI_API_KEY[:10])
+else:
+    print("❌ OPENAI_API_KEY not found. Check your .env or Streamlit secrets.")
 
 # Initialize embedding model
 try:
