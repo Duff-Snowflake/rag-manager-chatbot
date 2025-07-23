@@ -43,21 +43,22 @@ Respond in Markdown with calm, warm, concrete, dignified tone.
 """
     return llm.invoke(prompt).content
 
-# User auth
+# User auth settings
 UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
 REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
 ACCESS_DURATION_DAYS = 7
-db_path = "user_access.json"
+TIMEOUT_SECONDS = 600
+DB_PATH = "user_access.json"
 
 # Load access DB
 db = {}
 try:
-    with open(db_path, "r") as f:
+    with open(DB_PATH, "r") as f:
         db = json.load(f)
 except FileNotFoundError:
     pass
 
-# Init session
+# Init session state
 for k, v in {"authenticated": False, "email": "", "history": []}.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -65,58 +66,61 @@ for k, v in {"authenticated": False, "email": "", "history": []}.items():
 st.title("🎥 Employee Management Video Assistant")
 
 # Authentication
+def authenticate_user(email):
+    user_record = db.get(email)
+
+    # Handle legacy string format
+    if isinstance(user_record, str):
+        expiry_str = user_record
+        last_activity_str = datetime.now().isoformat()
+    elif isinstance(user_record, dict):
+        expiry_str = user_record.get("expiry")
+        last_activity_str = user_record.get("last_activity", datetime.now().isoformat())
+    else:
+        expiry_str = (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat()
+        last_activity_str = datetime.now().isoformat()
+        user_record = {"expiry": expiry_str, "last_activity": last_activity_str}
+        db[email] = user_record
+        with open(DB_PATH, "w") as f:
+            json.dump(db, f)
+
+    try:
+        expiry_dt = datetime.fromisoformat(expiry_str)
+        last_activity_dt = datetime.fromisoformat(last_activity_str)
+    except Exception:
+        st.error("Failed to parse user access record.")
+        st.stop()
+
+    if datetime.now() > expiry_dt:
+        st.error("❌ Trial expired. Contact us to extend access.")
+        st.stop()
+    elif (datetime.now() - last_activity_dt).total_seconds() > TIMEOUT_SECONDS:
+        st.warning("🔒 Session expired due to inactivity. Please log in again.")
+        st.session_state.authenticated = False
+        st.stop()
+    else:
+        user_record["last_activity"] = datetime.now().isoformat()
+        db[email] = user_record
+        with open(DB_PATH, "w") as f:
+            json.dump(db, f)
+        st.success(f"Access granted until {expiry_dt.date()}")
+        st.session_state.authenticated = True
+        st.experimental_rerun()
+
 if not st.session_state.authenticated:
     st.subheader("Login for access")
     email = st.text_input("Email:")
     if email:
         st.session_state.email = email
-
-    # Admin login
-    if email == UNRESTRICTED_EMAIL:
-        pwd = st.text_input("Admin password:", type="password")
-        if pwd == REQUIRED_PASSWORD:
-            st.success("Admin access granted.")
-            st.session_state.authenticated = True
-            st.experimental_rerun()
-    else:
-        # Trial user login
-        user_record = db.get(email)
-
-        if not user_record:
-            user_record = {
-                "expiry": (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat(),
-                "last_activity": datetime.now().isoformat()
-            }
-            db[email] = user_record
-            with open(db_path, "w") as f:
-                json.dump(db, f)
-
-        expiry_raw = user_record.get("expiry")
-        last_activity_raw = user_record.get("last_activity", datetime.now().isoformat())
-
-        expiry_dt = datetime.fromisoformat(expiry_raw) if isinstance(expiry_raw, str) else expiry_raw
-        last_activity_dt = datetime.fromisoformat(last_activity_raw)
-
-        # Check expiry and activity
-        timeout_seconds = 600
-
-        if datetime.now() > expiry_dt:
-            st.error("❌ Trial expired. Contact us to extend access.")
-            st.stop()
-        elif (datetime.now() - last_activity_dt).total_seconds() > timeout_seconds:
-            st.warning("🔒 Session expired due to inactivity. Please log in again.")
-            st.session_state.authenticated = False
-            st.stop()
+        if email == UNRESTRICTED_EMAIL:
+            pwd = st.text_input("Admin password:", type="password")
+            if pwd == REQUIRED_PASSWORD:
+                st.success("Admin access granted.")
+                st.session_state.authenticated = True
+                st.experimental_rerun()
         else:
-            st.success(f"Access granted until {expiry_dt.date()}")
-            st.session_state.authenticated = True
-            user_record["last_activity"] = datetime.now().isoformat()
-            db[email] = user_record
-            with open(db_path, "w") as f:
-                json.dump(db, f)
-            st.experimental_rerun()
+            authenticate_user(email)
 
-# Stop if still not authenticated
 if not st.session_state.authenticated:
     st.stop()
 
@@ -139,12 +143,17 @@ Question:
 Answer:
 """
     )
-    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True, chain_type_kwargs={"prompt": qa_prompt})
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        retriever=retriever,
+        return_source_documents=True,
+        chain_type_kwargs={"prompt": qa_prompt},
+    )
 except Exception as e:
     st.error(f"RAG loading failed: {e}")
     st.stop()
 
-# 🎬 INTRO VIDEO (load once)
+# 🎬 Intro Video
 if "intro_video_url" not in st.session_state:
     intro_script = """
 Hello. I’m your Employee Management Assistant.
@@ -161,15 +170,14 @@ Let’s get started.
     with st.spinner("Generating intro video..."):
         try:
             st.session_state.intro_video_url = generate_did_video(intro_script)
-        except Exception as e:
+        except Exception:
             st.warning("Video intro generation failed.")
             st.session_state.intro_video_url = None
 
-# Display intro video
 if st.session_state.intro_video_url:
     st.video(st.session_state.intro_video_url)
 
-# Interaction
+# 📝 User Interaction
 with st.form("query_form", clear_on_submit=True):
     query = st.text_input("Ask your question here:")
     submitted = st.form_submit_button("Submit")
@@ -179,14 +187,12 @@ if submitted and query.strip():
         result = qa_chain({"query": query})
         formatted = format_response(result["result"], query)
 
-        # Generate D-ID video for response
         try:
             video_url = generate_did_video(formatted)
-        except Exception as e:
+        except Exception:
             video_url = None
             st.warning("Video generation failed. Showing text only.")
 
-        # Save to history
         st.session_state.history.append({
             "q": query,
             "a": formatted,
@@ -194,16 +200,14 @@ if submitted and query.strip():
         })
         st.experimental_rerun()
 
-# Chat history display
 if st.session_state.history:
-    st.markdown("### 🧾 Previous Questions")
+    st.markdown("### 📟 Previous Questions")
     for h in reversed(st.session_state.history):
-        st.markdown(f"**🗨️ Question:** {h['q']}")
+        st.markdown(f"**🔨 Question:** {h['q']}")
         st.markdown(h["a"])
         if h.get("video"):
             st.video(h["video"])
         st.markdown("---")
 
-# Utility buttons
 if st.button("Clear History"):
     st.session_state.history = []
