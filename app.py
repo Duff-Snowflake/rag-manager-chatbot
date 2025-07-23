@@ -265,7 +265,7 @@ if st.session_state.history:
 # Bottom interaction area (Query input form)
 with st.form("query_form", clear_on_submit=True):
     query = st.text_input(
-        "Ask your question:",
+        "Ask your question: Then select 'Submit' below",
         placeholder="Type your question and click 'Submit'"
     )
     submitted = st.form_submit_button("Submit")
@@ -285,7 +285,7 @@ if submitted:
                 "sources": result.get("source_documents", [])
             })
         # Optionally rerun if needed for UI update, but test first
-        # st.experimental_rerun()
+        st.experimental_rerun()
     else:
         st.warning("Please enter a valid question before submitting.")
 
