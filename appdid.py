@@ -71,29 +71,49 @@ if not st.session_state.authenticated:
     if email:
         st.session_state.email = email
 
+    # Admin login
     if email == UNRESTRICTED_EMAIL:
         pwd = st.text_input("Admin password:", type="password")
         if pwd == REQUIRED_PASSWORD:
-            st.success("Access granted.")
+            st.success("Admin access granted.")
             st.session_state.authenticated = True
             st.experimental_rerun()
     else:
-        expiry = db.get(email)
-        if not expiry:
-            expiry = (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat()
-            db[email] = expiry
+        # Trial user login
+        user_record = db.get(email)
+
+        if not user_record:
+            user_record = {
+                "expiry": (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat(),
+                "last_activity": datetime.now().isoformat()
+            }
+            db[email] = user_record
             with open(db_path, "w") as f:
                 json.dump(db, f)
-        if isinstance(expiry, str):
-            expiry_dt = datetime.fromisoformat(expiry)
-        else:
-            expiry_dt = expiry
+
+        expiry_raw = user_record.get("expiry")
+        last_activity_raw = user_record.get("last_activity", datetime.now().isoformat())
+
+        expiry_dt = datetime.fromisoformat(expiry_raw) if isinstance(expiry_raw, str) else expiry_raw
+        last_activity_dt = datetime.fromisoformat(last_activity_raw)
+
+        # Check expiry and activity
+        timeout_seconds = 600
+
         if datetime.now() > expiry_dt:
-            st.error("Trial expired.")
+            st.error("❌ Trial expired. Contact us to extend access.")
+            st.stop()
+        elif (datetime.now() - last_activity_dt).total_seconds() > timeout_seconds:
+            st.warning("🔒 Session expired due to inactivity. Please log in again.")
+            st.session_state.authenticated = False
             st.stop()
         else:
-            st.success(f"Trial valid until {datetime.fromisoformat(expiry).date()}")
+            st.success(f"Access granted until {expiry_dt.date()}")
             st.session_state.authenticated = True
+            user_record["last_activity"] = datetime.now().isoformat()
+            db[email] = user_record
+            with open(db_path, "w") as f:
+                json.dump(db, f)
             st.experimental_rerun()
 
 # Stop if still not authenticated
@@ -139,10 +159,15 @@ You can ask things like:
 Let’s get started.
 """
     with st.spinner("Generating intro video..."):
-        st.session_state.intro_video_url = generate_did_video(intro_script)
+        try:
+            st.session_state.intro_video_url = generate_did_video(intro_script)
+        except Exception as e:
+            st.warning("Video intro generation failed.")
+            st.session_state.intro_video_url = None
 
 # Display intro video
-st.video(st.session_state.intro_video_url)
+if st.session_state.intro_video_url:
+    st.video(st.session_state.intro_video_url)
 
 # Interaction
 with st.form("query_form", clear_on_submit=True):
