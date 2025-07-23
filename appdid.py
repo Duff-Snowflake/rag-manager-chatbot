@@ -116,12 +116,10 @@ if not st.session_state.authenticated:
             with st.form("admin_login_form"):
                 pwd = st.text_input("Admin password:", type="password")
                 submitted = st.form_submit_button("Login")
-
             if submitted:
                 if pwd == REQUIRED_PASSWORD:
-                    st.success("Admin access granted.")
                     st.session_state.authenticated = True
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Incorrect admin password.")
         else:
