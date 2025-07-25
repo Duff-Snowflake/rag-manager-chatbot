@@ -186,7 +186,17 @@ if not st.session_state.authenticated:
 if st.session_state.email != UNRESTRICTED_EMAIL:
     user_record = db.get(st.session_state.email)
 
-    # If user does not exist, create a new record with expiry and last_activity
+    # Convert old-style string-only records to dict format
+    if isinstance(user_record, str):
+        user_record = {
+            "expiry": user_record,
+            "last_activity": datetime.now().isoformat()
+        }
+        db[st.session_state.email] = user_record
+        with open("user_access.json", "w") as f:
+            json.dump(db, f)
+
+    # If user does not exist at all, create a new record
     if not user_record:
         user_record = {
             "expiry": (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat(),
@@ -214,7 +224,7 @@ if st.session_state.email != UNRESTRICTED_EMAIL:
     else:
         st.success(f"Access granted until {expiry.date()}")
         st.session_state.authenticated = True
-        # Update last_activity on any valid interaction
+        # Update last_activity
         user_record["last_activity"] = datetime.now().isoformat()
         db[st.session_state.email] = user_record
         with open("user_access.json", "w") as f:
