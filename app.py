@@ -172,11 +172,20 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
 .chat-response * {
     font-size: inherit !important;  /* force children to inherit the size */
 }
-   .video-wrapper {
-        display: flex;
-        justify-content: center;
-        padding: 1rem 0;
-    }         
+.video-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 1rem 0;
+}         
+.video-wrapper video {
+    opacity: 0;
+    animation: fadeIn 1s ease-in-out forwards;
+}
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
 </style>
 
 <div class="top-banner">
@@ -307,29 +316,28 @@ except Exception as e:
     st.error(f"Error loading FAISS index or setting up RetrievalQA: {e}")
     st.stop()
 
-# Conversation area (oldest at top, newest at bottom)
-if st.session_state.history:
-    st.markdown('<div class="chat-box">', unsafe_allow_html=True)
-    for entry in st.session_state.history:
-        # Show D-ID video at the top
-        if "video_url" in entry and entry["video_url"]:
-            st.markdown(f'''
-                <div class="video-wrapper">
-                    <video controls autoplay muted playsinline width="512">
-                        <source src="{entry["video_url"]}" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                </div>
-            ''', unsafe_allow_html=True)
-        # Then show the user's question only (no assistant text)
-        st.markdown(f'''
-            <div class="chat-entry">
-                <div class="chat-question">{entry["q"]}</div>
-            </div>
-        ''', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+# ✅ Initialize required session state
+for key, default in {
+    "authenticated": False,
+    "email": "",
+    "video_url": "",
+    "latest_question": ""
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
-# Bottom interaction area (Query input form)
+# ✅ Display a single video player at the top if available
+if st.session_state["video_url"]:
+    st.markdown(f'''
+        <div class="video-wrapper">
+            <video controls autoplay muted playsinline width="512">
+                <source src="{st.session_state["video_url"]}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    ''', unsafe_allow_html=True)
+
+# ✅ Query input
 with st.form("query_form", clear_on_submit=True):
     query = st.text_input(
         "Ask your question:",
@@ -340,25 +348,20 @@ with st.form("query_form", clear_on_submit=True):
 if submitted:
     cleaned_query = query.strip()
     if cleaned_query:
-        with st.spinner("Thinking..."):
+        with st.spinner("Retrieving and formatting response..."):
             result = qa_chain({"query": cleaned_query})
             formatted = format_response(result["result"], cleaned_query)
-            if "history" not in st.session_state:
-                st.session_state.history = []
-            video_url = generate_did_video(formatted)
-        st.session_state.history.append({
-            "q": cleaned_query,
-            "a": formatted,
-            "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "sources": result.get("source_documents", []),
-            "video_url": video_url
-        })
-        # Optionally rerun if needed for UI update, but test first
-        # st.rerun()
+            with st.spinner("Generating video..."):
+                video_url = generate_did_video(formatted)
+
+        # ✅ Store only the latest video URL
+        st.session_state["video_url"] = video_url
+        st.session_state["latest_question"] = cleaned_query
+        st.rerun()
     else:
         st.warning("Please enter a valid question before submitting.")
 
-# Sample questions
+# ✅ Sample starter questions
 with st.expander("Sample questions to get you started", expanded=False):
     for i, q in enumerate([
         "How do I motivate an anxious type?",
@@ -367,21 +370,16 @@ with st.expander("Sample questions to get you started", expanded=False):
         "How do I deliver bad news without shutting someone down?"
     ]):
         if st.button(q, key=f"example_{i}"):
-            st.session_state.submitted_query = q
+            st.session_state.latest_question = q
 
-# Logout button
+# ✅ Logout button
 if st.button("Logout", key="logout"):
-    for key in ["authenticated", "email", "history", "submitted_query"]:
+    for key in ["authenticated", "email", "video_url", "latest_question"]:
         if key in st.session_state:
             del st.session_state[key]
     st.rerun()
 
-# Clear history button
-if st.button("Clear History", key="clear_button"):
-    st.session_state.history = []
-#    st.write("History cleared. Please refresh if not updated.")
-
-# Bottom logo display
+# ✅ Footer logo
 st.markdown("""
 <div style="width: 100%; text-align: center; margin-top: 2rem;">
   <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png"
