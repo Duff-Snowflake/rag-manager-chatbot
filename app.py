@@ -233,7 +233,10 @@ if submitted:
             result = qa_chain({"query": cleaned_query})
             formatted = format_response(result["result"], cleaned_query)
             with st.spinner("Generating video..."):
-                st.session_state["video_url"] = generate_did_video(formatted)
+                video_url = generate_did_video(formatted)
+                print(f"[DEBUG] D-ID video_url: {video_url}")
+
+                st.session_state["video_url"] = video_url
                 st.session_state["latest_question"] = cleaned_query
                 st.rerun()
     else:
