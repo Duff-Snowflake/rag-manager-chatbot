@@ -31,7 +31,9 @@ for key, default in {
     "authenticated": False,
     "email": "",
     "submitted_query": "",
-    "history": []
+    "history": [],
+    "video_url": None,
+    "latest_question": ""
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -177,21 +179,40 @@ ANSWER: {base_answer}
 qa_prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-You are an assistant... [trimmed for brevity]
+You are an assistant that answers questions strictly based on the provided context.
+If the context does not contain sufficient information to answer, respond with:
+"I do not have sufficient information on this topic in the current knowledge base. Please consult HR or an expert for guidance."
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
 """
 )
 
 try:
     retriever = load_faiss_index().as_retriever(return_source_documents=True)
+
+    chain_type_kwargs = {
+        "prompt": qa_prompt,
+        "document_variable_name": "context"
+    }
+
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
         retriever=retriever,
+        chain_type="stuff",
         return_source_documents=True,
-        chain_type_kwargs={"prompt": qa_prompt}
+        chain_type_kwargs=chain_type_kwargs
     )
+
 except Exception as e:
-    st.error(f"Error loading retriever: {e}")
+    st.error(f"Error loading FAISS index or QA chain: {e}")
     st.stop()
+
 
 # Question input
 with st.form("query_form", clear_on_submit=True):
