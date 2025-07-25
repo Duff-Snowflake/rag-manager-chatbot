@@ -14,6 +14,48 @@ from langchain.prompts import PromptTemplate
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
+# Load D-ID API key
+DID_API_KEY = os.getenv("DID_API_KEY")
+
+# D-ID video generation function
+import requests
+import time
+
+def generate_did_video(text):
+    headers = {
+        "Authorization": f"Bearer {DID_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "script": {
+            "type": "text",
+            "input": text,
+            "provider": {
+                "type": "elevenlabs",
+                "voice_id": "Rachel"
+            }
+        },
+        "source_url": "https://create-images-results.d-id.com/DefaultPresenter.png"
+    }
+
+    try:
+        response = requests.post("https://api.d-id.com/talks", json=payload, headers=headers)
+        response.raise_for_status()
+        talk_id = response.json().get("id")
+
+        for _ in range(20):
+            check = requests.get(f"https://api.d-id.com/talks/{talk_id}", headers=headers)
+            check.raise_for_status()
+            data = check.json()
+            if data.get("result_url"):
+                return data["result_url"]
+            time.sleep(1)
+
+        return None
+    except Exception as e:
+        print(f"[D-ID ERROR]: {e}")
+        return None
 
 def format_response(base_answer, query):
     prompt = f"""
@@ -130,6 +172,11 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
 .chat-response * {
     font-size: inherit !important;  /* force children to inherit the size */
 }
+   .video-wrapper {
+        display: flex;
+        justify-content: center;
+        padding: 1rem 0;
+    }         
 </style>
 
 <div class="top-banner">
@@ -264,10 +311,20 @@ except Exception as e:
 if st.session_state.history:
     st.markdown('<div class="chat-box">', unsafe_allow_html=True)
     for entry in st.session_state.history:
+        # Show D-ID video at the top
+        if "video_url" in entry and entry["video_url"]:
+            st.markdown(f'''
+                <div class="video-wrapper">
+                    <video controls autoplay muted playsinline width="512">
+                        <source src="{entry["video_url"]}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            ''', unsafe_allow_html=True)
+        # Then show the user's question only (no assistant text)
         st.markdown(f'''
             <div class="chat-entry">
                 <div class="chat-question">{entry["q"]}</div>
-                <div class="chat-response">{entry["a"]}</div>
             </div>
         ''', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -288,12 +345,14 @@ if submitted:
             formatted = format_response(result["result"], cleaned_query)
             if "history" not in st.session_state:
                 st.session_state.history = []
-            st.session_state.history.append({
-                "q": cleaned_query,
-                "a": formatted,
-                "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "sources": result.get("source_documents", [])
-            })
+            video_url = generate_did_video(formatted)
+        st.session_state.history.append({
+            "q": cleaned_query,
+            "a": formatted,
+            "t": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "sources": result.get("source_documents", []),
+            "video_url": video_url
+        })
         # Optionally rerun if needed for UI update, but test first
         # st.rerun()
     else:
