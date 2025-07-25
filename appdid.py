@@ -105,7 +105,7 @@ def authenticate_user(email):
             json.dump(db, f)
         st.success(f"Access granted until {expiry_dt.date()}")
         st.session_state.authenticated = True
-        st.experimental_rerun()
+        st.rerun()
 
 if not st.session_state.authenticated:
     st.subheader("Login for access")
@@ -202,7 +202,7 @@ if submitted and query.strip():
             "a": formatted,
             "video": video_url
         })
-        st.experimental_rerun()
+        st.rerun()
 
 if st.session_state.history:
     st.markdown("### 📟 Previous Questions")
