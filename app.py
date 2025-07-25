@@ -13,6 +13,20 @@ from rag_pipeline import load_faiss_index
 # Streamlit config
 st.set_page_config(page_title="Employee Management Assistant", layout="centered")
 
+# ✅ Initialize session state BEFORE any access
+for key, default in {
+    "authenticated": False,
+    "email": "",
+    "submitted_query": "",
+    "history": [],
+    "video_url": None,
+    "latest_question": ""
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+
+
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -25,18 +39,6 @@ ACCESS_DURATION_DAYS = 7
 
 # Initialize LLM
 llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
-
-# Session state init
-for key, default in {
-    "authenticated": False,
-    "email": "",
-    "submitted_query": "",
-    "history": [],
-    "video_url": None,
-    "latest_question": ""
-}.items():
-    if key not in st.session_state:
-        st.session_state[key] = default
 
 # Load access database
 db = {}
