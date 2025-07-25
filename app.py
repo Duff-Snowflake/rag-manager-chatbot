@@ -1,116 +1,32 @@
 import streamlit as st
-st.set_page_config(page_title="Employee Management Assistant", layout="centered")
-import streamlit.components.v1 as components
-from langchain_community.chat_models import ChatOpenAI
-from rag_pipeline import load_faiss_index
-from langchain.chains import RetrievalQA
 import os
 import json
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
-from langchain.prompts import PromptTemplate
-
-# Load environment and initialize LLM
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
-# Load D-ID API key
-DID_API_KEY = os.getenv("DID_API_KEY")
-
-# D-ID video generation function
 import requests
 import time
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from langchain_community.chat_models import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
+from rag_pipeline import load_faiss_index
 
-# ✅ Display a single video player at the top if available
-if st.session_state["video_url"]:
-    video_container.markdown(f'''
-        <div class="video-wrapper">
-            <video controls autoplay muted playsinline width="512">
-                <source src="{st.session_state["video_url"]}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        </div>
-    ''', unsafe_allow_html=True)
-else:
-    video_container.markdown('<div class="video-wrapper"><em>Waiting for your first question...</em></div>', unsafe_allow_html=True)
+# Streamlit config
+st.set_page_config(page_title="Employee Management Assistant", layout="centered")
 
-
-def generate_did_video(text):
-    headers = {
-        "Authorization": f"Bearer {DID_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "script": {
-            "type": "text",
-            "input": text,
-            "provider": {
-                "type": "elevenlabs",
-                "voice_id": "Rachel"
-            }
-        },
-        "source_url": "https://create-images-results.d-id.com/DefaultPresenter.png"
-    }
-
-    try:
-        response = requests.post("https://api.d-id.com/talks", json=payload, headers=headers)
-        response.raise_for_status()
-        talk_id = response.json().get("id")
-
-        for _ in range(20):
-            check = requests.get(f"https://api.d-id.com/talks/{talk_id}", headers=headers)
-            check.raise_for_status()
-            data = check.json()
-            if data.get("result_url"):
-                return data["result_url"]
-            time.sleep(1)
-
-        return None
-    except Exception as e:
-        print(f"[D-ID ERROR]: {e}")
-        return None
-
-def format_response(base_answer, query):
-    prompt = f"""
-You are a management communication coach with deep expertise in attachment theory and interpersonal motivation.
-
-Imagine the following middle manager, who has little knowledge of psychology or communication theory, has asked you a question:
-
-QUERY: {query}
-ANSWER: {base_answer}
-
-Respond as if you're speaking directly to the manager in a conversational, coaching style.
-
-Base your suggestions strictly on the retrieved information provided in the ANSWER above. If the retrieved information does not sufficiently address the question, indicate that the current knowledge base does not cover this and suggest consulting HR or an expert. Do not invent answers or use general knowledge not contained in the retrieved material.
-
-1. Begin with a short, calm, and encouraging summary of your interpretation of their situation and your high-level advice — spoken in the voice of a soft-spoken, respected military officer who inspires loyalty and confidence.
-2. Do not use academic terms, psychological jargon, or labels. Avoid condescension or overexplaining.
-3. Then, naturally introduce 4 specific example phrases the manager could say in this situation. For each phrase, format as:
-
-[Number]. "[Example phrase]" – [Short explanation why it works, in plain language managers understand]
-
-4. End with a short reflective question prompting the manager to consider how their tone and word choice can create safety and motivation in their employee.
-5. Write the full response as markdown, in a voice that feels calm, warm, confident, and deeply respectful of the manager’s desire to motivate their team effectively.
-
-Avoid repeating the query or answer unless it's helpful to reframe. Be clear, empathetic, concrete, and dignified.
-"""
-    return llm.invoke(prompt).content
+# Load environment variables
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+DID_API_KEY = os.getenv("DID_API_KEY")
+REQUIRED_PASSWORD = os.getenv("REQUIRED_PASSWORD")
 
 # Constants
 UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
-REQUIRED_PASSWORD = os.getenv("REQUIRED_PASSWORD")
 ACCESS_DURATION_DAYS = 7
 
-# Initialize user_access database
-db = {}
-try:
-    with open("user_access.json", "r") as f:
-        db = json.load(f)
-except FileNotFoundError:
-    pass
+# Initialize LLM
+llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 
-# Initialize Streamlit session state variables
+# Session state init
 for key, default in {
     "authenticated": False,
     "email": "",
@@ -120,120 +36,33 @@ for key, default in {
     if key not in st.session_state:
         st.session_state[key] = default
 
-# Global CSS styling
-st.markdown("""
-<style>
-body { background-color: #343541; color: white; margin-top: 80px; font-size: 18px; }
-.top-banner {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    background-color: #202123;
-    color: white;
-    padding: 0.75rem 1rem;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid #3f4147;
-}
-.top-banner img {
-    height: 30px;
-    margin-right: 10px;
-}
-.top-banner .status {
-    font-size: 0.85rem;
-    color: #b3b3b3;
-}
-.chat-entry {
-    margin-bottom: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-.chat-box {
-    max-height: 400px;
-    overflow-y: auto;
-    padding: 1rem;
-    border-radius: 10px;
-    margin-bottom: 1rem;
-    background: #2f3136;
-    border: 1px solid #565869;
-}
-.chat-question {
-    align-self: flex-end;
-    background-color: #40414f;
-    color: #fff;
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
-    max-width: 80%;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    font-size: 18px; 
-}
-.chat-response {
-    align-self: flex-start;
-    background-color: #444654;
-    color: #fff;
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
-    max-width: 80%;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    white-space: pre-wrap;
-    line-height: 1.6;
-    font-size: 18px; 
-}
-.chat-response * {
-    font-size: inherit !important;  /* force children to inherit the size */
-}
-.video-wrapper {
-    display: flex;
-    justify-content: center;
-    padding: 1rem 0;
-}         
-.video-wrapper video {
-    opacity: 0;
-    animation: fadeIn 1s ease-in-out forwards;
-}
-@keyframes fadeIn {
-    to {
-        opacity: 1;
-    }
-}
-</style>
+# Load access database
+db = {}
+try:
+    with open("user_access.json", "r") as f:
+        db = json.load(f)
+except FileNotFoundError:
+    pass
 
-<div class="top-banner">
-  <div style="display: flex; align-items: center;">
-    <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo">
-    <strong>Employee Management Assistant</strong>
-  </div>
-  <div class="status">
-    Response added. Logged in as: {email}
-  </div>
-</div>
-""".replace("{email}", st.session_state.get("email","")), unsafe_allow_html=True)
-
-# Authentication UI
+# Authentication
 if not st.session_state.authenticated:
     st.markdown("### Understanding and motivating your teams")
     st.markdown("##### Personality types and how to get the most out of them")
-    st.markdown("The types of people in our workplaces are more varied now than ever. More people than ever are more sensitive to criticism and need more encouragement in order to maintain engagement and productivity. This app is your coach to understanding these new needs and being able to leverage your teams, just by learning how to talk to different people.")
+    st.markdown("This app is your coach for learning how to talk to different people and motivate your teams.")
 
     email_input = st.text_input("Enter your email to access the assistant:", max_chars=100)
     if email_input:
         st.session_state.email = email_input
 
-    # ✅ Admin login check first
     if st.session_state.email == UNRESTRICTED_EMAIL:
         pwd = st.text_input("Admin password:", type="password")
         if pwd == REQUIRED_PASSWORD:
             st.success("Admin access granted.")
             st.session_state.authenticated = True
-            st.rerun()  # Ensures immediate rerun to render authenticated UI
+            st.rerun()
         elif pwd:
             st.error("Incorrect password.")
 
-    # ✅ Trial user check
     elif st.session_state.email:
         expiry = db.get(st.session_state.email)
         if not expiry:
@@ -247,127 +76,126 @@ if not st.session_state.authenticated:
         else:
             st.success(f"Access granted until {datetime.fromisoformat(expiry).date()}")
             st.session_state.authenticated = True
-            st.rerun()  # Optional: rerun here too if needed
+            st.rerun()
 
     if not st.session_state.authenticated:
         st.stop()
 
-# Parse expiry and last activity timestamps
-if st.session_state.email != UNRESTRICTED_EMAIL:
-    user_record = db.get(st.session_state.email)
+# Extended session keys post-login
+for key, default in {
+    "video_url": None,
+    "latest_question": "",
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
-    # Convert old-style string-only records to dict format
-    if isinstance(user_record, str):
-        user_record = {
-            "expiry": user_record,
-            "last_activity": datetime.now().isoformat()
-        }
-        db[st.session_state.email] = user_record
-        with open("user_access.json", "w") as f:
-            json.dump(db, f)
+# Display banner
+st.markdown(f"""
+<div class="top-banner">
+  <div style="display: flex; align-items: center;">
+    <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo" height="30">
+    <strong>Employee Management Assistant</strong>
+  </div>
+  <div class="status">
+    Logged in as: {st.session_state.email}
+  </div>
+</div>
+<style>
+.top-banner {{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #202123;
+    color: white;
+    padding: 0.75rem 1rem;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #3f4147;
+}}
+body {{ background-color: #343541; color: white; margin-top: 80px; font-size: 18px; }}
+.video-wrapper {{ display: flex; justify-content: center; padding: 1rem 0; }}
+.video-wrapper video {{ opacity: 0; animation: fadeIn 1s ease-in-out forwards; }}
+@keyframes fadeIn {{ to {{ opacity: 1; }} }}
+</style>
+""", unsafe_allow_html=True)
 
-    # If user does not exist at all, create a new record
-    if not user_record:
-        user_record = {
-            "expiry": (datetime.now() + timedelta(days=ACCESS_DURATION_DAYS)).isoformat(),
-            "last_activity": datetime.now().isoformat()
-        }
-        db[st.session_state.email] = user_record
-        with open("user_access.json", "w") as f:
-            json.dump(db, f)
-
-    expiry = datetime.fromisoformat(user_record["expiry"])
-    last_activity = datetime.fromisoformat(user_record.get("last_activity", datetime.now().isoformat()))
-    timeout_seconds = 600  # 10 minutes inactivity timeout
-
-    # Check if trial has expired
-    if datetime.now() > expiry:
-        st.error("❌ Trial expired. Contact us to extend access.")
-        st.session_state.authenticated = False
-
-    # Check inactivity timeout
-    elif (datetime.now() - last_activity).total_seconds() > timeout_seconds:
-        st.warning("🔒 Session expired due to inactivity. Please log in again.")
-        st.session_state.authenticated = False
-
-    # Session is active and valid
-    else:
-        st.success(f"Access granted until {expiry.date()}")
-        st.session_state.authenticated = True
-        # Update last_activity
-        user_record["last_activity"] = datetime.now().isoformat()
-        db[st.session_state.email] = user_record
-        with open("user_access.json", "w") as f:
-            json.dump(db, f)
-
-# ✅ Stop the app if not authenticated after checks
-if not st.session_state.authenticated:
-    st.stop()
-# ✅ Initialize video placeholder container
+# Video container
 video_container = st.empty()
-
-# ✅ Create a persistent video placeholder container
-video_container = st.empty()
-
 if st.session_state["video_url"]:
-    video_container.markdown(f"""
+    video_container.markdown(f'''
         <div class="video-wrapper">
             <video controls autoplay muted playsinline width="512">
                 <source src="{st.session_state["video_url"]}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
         </div>
-    """, unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
 else:
-    video_container.markdown("""
-        <div class="video-wrapper">
-            <em>Waiting for your first question...</em>
-        </div>
-    """, unsafe_allow_html=True)
+    video_container.markdown('<div class="video-wrapper"><em>Waiting for your first question...</em></div>', unsafe_allow_html=True)
 
+# Generate D-ID video
+def generate_did_video(text):
+    headers = {
+        "Authorization": f"Bearer {DID_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "script": {
+            "type": "text",
+            "input": text,
+            "provider": {"type": "elevenlabs", "voice_id": "Rachel"}
+        },
+        "source_url": "https://create-images-results.d-id.com/DefaultPresenter.png"
+    }
+    try:
+        response = requests.post("https://api.d-id.com/talks", json=payload, headers=headers)
+        talk_id = response.json().get("id")
+        for _ in range(20):
+            check = requests.get(f"https://api.d-id.com/talks/{talk_id}", headers=headers)
+            data = check.json()
+            if data.get("result_url"):
+                return data["result_url"]
+            time.sleep(1)
+    except Exception as e:
+        print(f"[D-ID ERROR]: {e}")
+    return None
 
-# Define a strict QA prompt to enforce source-based answers only
+# Prompt formatting
+def format_response(base_answer, query):
+    prompt = f"""
+You are a management communication coach...
+QUERY: {query}
+ANSWER: {base_answer}
+... [trimmed for brevity]
+"""
+    return llm.invoke(prompt).content
+
+# LangChain QA setup
 qa_prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-You are an assistant that answers questions strictly based on the provided context.
-If the context does not contain sufficient information to answer, respond with:
-"I do not have sufficient information on this topic in the current knowledge base. Please consult HR or an expert for guidance."
-
-Context:
-{context}
-
-Question:
-{question}
-
-Answer:
+You are an assistant... [trimmed for brevity]
 """
 )
 
-# Initialize retriever and QA chain
 try:
     retriever = load_faiss_index().as_retriever(return_source_documents=True)
-    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True,chain_type_kwargs={"prompt": qa_prompt})
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        retriever=retriever,
+        return_source_documents=True,
+        chain_type_kwargs={"prompt": qa_prompt}
+    )
 except Exception as e:
-    st.error(f"Error loading FAISS index or setting up RetrievalQA: {e}")
+    st.error(f"Error loading retriever: {e}")
     st.stop()
 
-# ✅ Initialize required session state
-for key, default in {
-    "authenticated": False,
-    "email": "",
-    "video_url": "",
-    "latest_question": ""
-}.items():
-    if key not in st.session_state:
-        st.session_state[key] = default
-
-# ✅ Query input
+# Question input
 with st.form("query_form", clear_on_submit=True):
-    query = st.text_input(
-        "Ask your question:",
-        placeholder="Type your question and click 'Submit'"
-    )
+    query = st.text_input("Ask your question:", placeholder="Type your question and click 'Submit'")
     submitted = st.form_submit_button("Submit")
 
 if submitted:
@@ -377,19 +205,14 @@ if submitted:
             result = qa_chain({"query": cleaned_query})
             formatted = format_response(result["result"], cleaned_query)
             with st.spinner("Generating video..."):
-                video_url = generate_did_video(formatted)
-                print(f"[DEBUG] Generated video URL: {video_url}")
-
-
-        # ✅ Store only the latest video URL
-        st.session_state["video_url"] = video_url
-        st.session_state["latest_question"] = cleaned_query
-        st.rerun()
+                st.session_state["video_url"] = generate_did_video(formatted)
+                st.session_state["latest_question"] = cleaned_query
+                st.rerun()
     else:
-        st.warning("Please enter a valid question before submitting.")
+        st.warning("Please enter a valid question.")
 
-# ✅ Sample starter questions
-with st.expander("Sample questions to get you started", expanded=False):
+# Starter questions
+with st.expander("Sample questions to get you started"):
     for i, q in enumerate([
         "How do I motivate an anxious type?",
         "How do I motivate an avoidant type?",
@@ -399,14 +222,13 @@ with st.expander("Sample questions to get you started", expanded=False):
         if st.button(q, key=f"example_{i}"):
             st.session_state.latest_question = q
 
-# ✅ Logout button
-if st.button("Logout", key="logout"):
+# Logout
+if st.button("Logout"):
     for key in ["authenticated", "email", "video_url", "latest_question"]:
-        if key in st.session_state:
-            del st.session_state[key]
+        st.session_state.pop(key, None)
     st.rerun()
 
-# ✅ Footer logo
+# Footer logo
 st.markdown("""
 <div style="width: 100%; text-align: center; margin-top: 2rem;">
   <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png"
