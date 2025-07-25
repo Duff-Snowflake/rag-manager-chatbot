@@ -43,7 +43,7 @@ Avoid repeating the query or answer unless it's helpful to reframe. Be clear, em
 
 # Constants
 UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
-REQUIRED_PASSWORD = "b@6J8KJNff9*&^N:ll3Fb@r@3"
+REQUIRED_PASSWORD = os.getenv("REQUIRED_PASSWORD")
 ACCESS_DURATION_DAYS = 7
 
 # Initialize user_access database
@@ -159,7 +159,7 @@ if not st.session_state.authenticated:
         if pwd == REQUIRED_PASSWORD:
             st.success("Admin access granted.")
             st.session_state.authenticated = True
-            st.experimental_rerun()  # Ensures immediate rerun to render authenticated UI
+            st.rerun()  # Ensures immediate rerun to render authenticated UI
         elif pwd:
             st.error("Incorrect password.")
 
@@ -177,7 +177,7 @@ if not st.session_state.authenticated:
         else:
             st.success(f"Access granted until {datetime.fromisoformat(expiry).date()}")
             st.session_state.authenticated = True
-            st.experimental_rerun()  # Optional: rerun here too if needed
+            st.rerun()  # Optional: rerun here too if needed
 
     if not st.session_state.authenticated:
         st.stop()
@@ -285,7 +285,7 @@ if submitted:
                 "sources": result.get("source_documents", [])
             })
         # Optionally rerun if needed for UI update, but test first
-        # st.experimental_rerun()
+        # st.rerun()
     else:
         st.warning("Please enter a valid question before submitting.")
 
@@ -305,7 +305,7 @@ if st.button("Logout", key="logout"):
     for key in ["authenticated", "email", "history", "submitted_query"]:
         if key in st.session_state:
             del st.session_state[key]
-    st.experimental_rerun()
+    st.rerun()
 
 # Clear history button
 if st.button("Clear History", key="clear_button"):
