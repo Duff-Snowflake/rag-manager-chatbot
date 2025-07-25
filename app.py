@@ -126,19 +126,24 @@ body {{ background-color: #343541; color: white; margin-top: 80px; font-size: 18
 </style>
 """, unsafe_allow_html=True)
 
-# Video container
+# ✅ Create a persistent video placeholder container
 video_container = st.empty()
+
 if st.session_state["video_url"]:
-    video_container.markdown(f'''
-        <div class="video-wrapper">
+    video_container.components.v1.html(f"""
+        <div style="display: flex; justify-content: center; padding: 1rem 0;">
             <video controls autoplay muted playsinline width="512">
-                <source src="{st.session_state["video_url"]}" type="video/mp4">
+                <source src="{st.session_state['video_url']}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
         </div>
-    ''', unsafe_allow_html=True)
+    """, height=300)
 else:
-    video_container.markdown('<div class="video-wrapper"><em>Waiting for your first question...</em></div>', unsafe_allow_html=True)
+    video_container.markdown("""
+        <div style="text-align: center; padding: 1rem 0;">
+            <em>Waiting for your first question...</em>
+        </div>
+    """, unsafe_allow_html=True)
 
 # Generate D-ID video
 def generate_did_video(text):
