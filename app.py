@@ -21,6 +21,20 @@ DID_API_KEY = os.getenv("DID_API_KEY")
 import requests
 import time
 
+# ✅ Display a single video player at the top if available
+if st.session_state["video_url"]:
+    video_container.markdown(f'''
+        <div class="video-wrapper">
+            <video controls autoplay muted playsinline width="512">
+                <source src="{st.session_state["video_url"]}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    ''', unsafe_allow_html=True)
+else:
+    video_container.markdown('<div class="video-wrapper"><em>Waiting for your first question...</em></div>', unsafe_allow_html=True)
+
+
 def generate_did_video(text):
     headers = {
         "Authorization": f"Bearer {DID_API_KEY}",
@@ -289,6 +303,28 @@ if st.session_state.email != UNRESTRICTED_EMAIL:
 # ✅ Stop the app if not authenticated after checks
 if not st.session_state.authenticated:
     st.stop()
+# ✅ Initialize video placeholder container
+video_container = st.empty()
+
+# ✅ Create a persistent video placeholder container
+video_container = st.empty()
+
+if st.session_state["video_url"]:
+    video_container.markdown(f"""
+        <div class="video-wrapper">
+            <video controls autoplay muted playsinline width="512">
+                <source src="{st.session_state["video_url"]}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    """, unsafe_allow_html=True)
+else:
+    video_container.markdown("""
+        <div class="video-wrapper">
+            <em>Waiting for your first question...</em>
+        </div>
+    """, unsafe_allow_html=True)
+
 
 # Define a strict QA prompt to enforce source-based answers only
 qa_prompt = PromptTemplate(
@@ -325,17 +361,6 @@ for key, default in {
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
-
-# ✅ Display a single video player at the top if available
-if st.session_state["video_url"]:
-    st.markdown(f'''
-        <div class="video-wrapper">
-            <video controls autoplay muted playsinline width="512">
-                <source src="{st.session_state["video_url"]}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        </div>
-    ''', unsafe_allow_html=True)
 
 # ✅ Query input
 with st.form("query_form", clear_on_submit=True):
