@@ -7,3 +7,43 @@ __pycache__/
 .env
 assets/GitCommands.txt
 user_access.json
+
+# Don't track virtual environments
+.venv/
+venv/
+
+# Streamlit secrets and environment files
+.env
+.secrets.toml
+
+# User access tracking
+user_access.json
+user_access_old.json
+
+# Python cache and temp files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code settings (optional, personal)
+.vscode/
+
+# Jupyter and IPython
+.ipynb_checkpoints/
+*.ipynb
+
+# Mac/Windows weird temp files
+*.swp
+*.tmp
+~$*
+
+# Other personal/test files
+const player = GetPlayer();.txt
+

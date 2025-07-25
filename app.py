@@ -353,6 +353,8 @@ if submitted:
             formatted = format_response(result["result"], cleaned_query)
             with st.spinner("Generating video..."):
                 video_url = generate_did_video(formatted)
+                print(f"[DEBUG] Generated video URL: {video_url}")
+
 
         # ✅ Store only the latest video URL
         st.session_state["video_url"] = video_url
