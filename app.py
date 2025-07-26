@@ -173,6 +173,10 @@ else:
 #     return None
 
 def generate_did_video(text):
+    # Load D-ID key from secrets
+    DID_API_KEY = st.secrets["DID_API_KEY"]
+    print(f"[DEBUG] Loaded D-ID key prefix: {DID_API_KEY[:5]}...suffix: {DID_API_KEY[-4:]}")
+    
     headers = {
         "Authorization": f"Bearer {DID_API_KEY}",
         "Content-Type": "application/json"
