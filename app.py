@@ -232,12 +232,20 @@ if submitted:
         with st.spinner("Retrieving and formatting response..."):
             result = qa_chain({"query": cleaned_query})
             formatted = format_response(result["result"], cleaned_query)
+
             with st.spinner("Generating video..."):
                 video_url = generate_did_video(formatted)
-                print(f"[DEBUG] D-ID video_url: {video_url}")
-
                 st.session_state["video_url"] = video_url
                 st.session_state["latest_question"] = cleaned_query
+
+                # ✅ DEBUG INFO PANEL
+                with st.sidebar.expander("🔧 Debug Info", expanded=False):
+                    st.markdown("**Generated Video URL:**")
+                    st.code(video_url or "No video URL returned", language="text")
+
+                    st.markdown("**Formatted Response:**")
+                    st.code(formatted or "No response generated", language="markdown")
+
                 st.rerun()
     else:
         st.warning("Please enter a valid question.")
