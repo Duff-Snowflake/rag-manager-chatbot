@@ -146,6 +146,32 @@ else:
     """, unsafe_allow_html=True)
 
 # Generate D-ID video
+# def generate_did_video(text):
+#     headers = {
+#         "Authorization": f"Bearer {DID_API_KEY}",
+#         "Content-Type": "application/json"
+#     }
+#     payload = {
+#         "script": {
+#             "type": "text",
+#             "input": text,
+#             "provider": {"type": "elevenlabs", "voice_id": "Rachel"}
+#         },
+#         "source_url": "https://create-images-results.d-id.com/DefaultPresenter.png"
+#     }
+#     try:
+#         response = requests.post("https://api.d-id.com/talks", json=payload, headers=headers)
+#         talk_id = response.json().get("id")
+#         for _ in range(20):
+#             check = requests.get(f"https://api.d-id.com/talks/{talk_id}", headers=headers)
+#             data = check.json()
+#             if data.get("result_url"):
+#                 return data["result_url"]
+#             time.sleep(1)
+#     except Exception as e:
+#         print(f"[D-ID ERROR]: {e}")
+#     return None
+
 def generate_did_video(text):
     headers = {
         "Authorization": f"Bearer {DID_API_KEY}",
@@ -159,18 +185,31 @@ def generate_did_video(text):
         },
         "source_url": "https://create-images-results.d-id.com/DefaultPresenter.png"
     }
+
     try:
         response = requests.post("https://api.d-id.com/talks", json=payload, headers=headers)
+        response.raise_for_status()
         talk_id = response.json().get("id")
+
         for _ in range(20):
             check = requests.get(f"https://api.d-id.com/talks/{talk_id}", headers=headers)
+            check.raise_for_status()
             data = check.json()
             if data.get("result_url"):
                 return data["result_url"]
             time.sleep(1)
-    except Exception as e:
-        print(f"[D-ID ERROR]: {e}")
+
+        st.sidebar.error("Timed out waiting for video to become available.")
+
+    except requests.exceptions.RequestException as e:
+        st.sidebar.error(f"🚨 D-ID request failed: {e}")
+        try:
+            st.sidebar.code(response.text, language="json")
+        except:
+            pass
+
     return None
+
 
 # Prompt formatting
 def format_response(base_answer, query):
