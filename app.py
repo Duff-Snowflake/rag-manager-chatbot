@@ -255,6 +255,15 @@ with st.expander("Sample questions to get you started"):
         if st.button(q, key=f"example_{i}"):
             st.session_state.latest_question = q
 
+if st.session_state.get("debug_ready"):
+    with st.sidebar:
+        st.markdown("### 🔧 Debug Info")
+        st.code(f"Formatted:\n{st.session_state.get('debug_formatted', '')}", language="markdown")
+        st.code(f"Video URL:\n{st.session_state.get('debug_video_url', '')}", language="text")
+        if st.button("Continue"):
+            st.session_state["debug_ready"] = False
+            st.rerun()
+
 # Logout
 if st.button("Logout"):
     for key in ["authenticated", "email", "video_url", "latest_question"]:
