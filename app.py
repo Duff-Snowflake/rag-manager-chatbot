@@ -43,10 +43,10 @@ def _get_secret(name, default=None):
     except Exception:
         return os.getenv(name, default)
 
-OPENAI_API_KEY   = _get_secret("OPENAI_API_KEY", "")
+OPENAI_API_KEY    = _get_secret("OPENAI_API_KEY", "")
 REQUIRED_PASSWORD = _get_secret("REQUIRED_PASSWORD", "")
-DID_AGENT_ID     = _get_secret("DID_AGENT_ID", "")
-DID_CLIENT_KEY   = _get_secret("DID_CLIENT_KEY", "")
+DID_AGENT_ID      = _get_secret("DID_AGENT_ID", "")
+DID_CLIENT_KEY    = _get_secret("DID_CLIENT_KEY", "")
 
 # ------------------------------------------------------------------------------
 # LLM
@@ -70,13 +70,21 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
 .top-banner .status { font-size: 0.85rem; color: #b3b3b3; }
 
 .video-wrapper {
-    display: flex; justify-content: center; padding: 1rem 0;
+    display: flex; flex-direction: column; align-items: center; padding: 1rem 0;
 }
 video#agent-video {
-    width: 100%; max-width: 512px; border-radius: 12px; background: #000;
+    width: 100%;
+    max-width: 640px;          /* allow a bit larger player */
+    height: auto;              /* keep aspect ratio */
+    object-fit: contain;       /* avoid CSS cropping */
+    border-radius: 12px;
+    background: #000;
     opacity: 0; animation: fadeIn 1s ease-in-out forwards;
 }
 @keyframes fadeIn { to { opacity: 1; } }
+.video-tip {
+    text-align: center; font-size: 0.9rem; opacity: 0.8; margin-top: 0.25rem;
+}
 </style>
 <div class="top-banner">
   <div style="display: flex; align-items: center;">
@@ -247,7 +255,8 @@ escaped_text = json_dumps(speak_text)  # safe for JS
 
 agent_html = f"""
 <div class="video-wrapper">
-  <video id="agent-video" autoplay muted playsinline></video>
+  <video id="agent-video" controls autoplay playsinline></video>
+  <div class="video-tip">Tip: click the speaker icon to unmute if your browser blocked autoplay audio.</div>
 </div>
 
 <script type="module">
@@ -301,7 +310,7 @@ agent_html = f"""
 """
 
 # Render the agent video block (one window at the top)
-components.html(agent_html, height=420)
+components.html(agent_html, height=500)
 
 # ------------------------------------------------------------------------------
 # Query input
