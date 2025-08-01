@@ -1,11 +1,10 @@
 # app.py
 import os
 import json
-import time
-import requests
 from datetime import datetime, timedelta
 
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
 from langchain_community.chat_models import ChatOpenAI
@@ -15,31 +14,26 @@ from langchain.chains import RetrievalQA
 from rag_pipeline import load_faiss_index
 
 # ------------------------------------------------------------------------------
-# Streamlit page config
+# Page config
 # ------------------------------------------------------------------------------
 st.set_page_config(page_title="Employee Management Assistant", layout="centered")
 
 # ------------------------------------------------------------------------------
-# Session state: initialize BEFORE any access
+# Session state init (BEFORE any access)
 # ------------------------------------------------------------------------------
 for key, default in {
     "authenticated": False,
     "email": "",
     "submitted_query": "",
     "history": [],
-    "video_url": None,
     "latest_question": "",
-    "debug_ready": False,
-    "debug_formatted": "",
-    "debug_video_url": "",
+    "speak_text": "",  # <- what the Agent will say on each render
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
 
 # ------------------------------------------------------------------------------
-# Secrets / environment
-#   - On Streamlit Cloud: use st.secrets
-#   - Locally: .env fallback
+# Secrets / environment helpers
 # ------------------------------------------------------------------------------
 load_dotenv()
 
@@ -49,9 +43,10 @@ def _get_secret(name, default=None):
     except Exception:
         return os.getenv(name, default)
 
-OPENAI_API_KEY = _get_secret("OPENAI_API_KEY", "")
-DID_API_KEY    = _get_secret("DID_API_KEY", "")
+OPENAI_API_KEY   = _get_secret("OPENAI_API_KEY", "")
 REQUIRED_PASSWORD = _get_secret("REQUIRED_PASSWORD", "")
+DID_AGENT_ID     = _get_secret("DID_AGENT_ID", "")
+DID_CLIENT_KEY   = _get_secret("DID_CLIENT_KEY", "")
 
 # ------------------------------------------------------------------------------
 # LLM
@@ -59,7 +54,7 @@ REQUIRED_PASSWORD = _get_secret("REQUIRED_PASSWORD", "")
 llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 
 # ------------------------------------------------------------------------------
-# Global CSS (kept from your version, with video fade-in)
+# Global CSS
 # ------------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -77,7 +72,8 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
 .video-wrapper {
     display: flex; justify-content: center; padding: 1rem 0;
 }
-.video-wrapper video {
+video#agent-video {
+    width: 100%; max-width: 512px; border-radius: 12px; background: #000;
     opacity: 0; animation: fadeIn 1s ease-in-out forwards;
 }
 @keyframes fadeIn { to { opacity: 1; } }
@@ -92,7 +88,7 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
 """.replace("{email}", st.session_state.get("email","")), unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# Authentication & trial access (unchanged logic; minor hardening)
+# Authentication & trial access
 # ------------------------------------------------------------------------------
 UNRESTRICTED_EMAIL = "duffwarrenconsulting@gmail.com"
 ACCESS_DURATION_DAYS = 7
@@ -143,7 +139,7 @@ if not st.session_state.authenticated:
     if not st.session_state.authenticated:
         st.stop()
 
-# active session checks
+# Active session checks
 if st.session_state.email != UNRESTRICTED_EMAIL:
     user_record = db.get(st.session_state.email)
     if isinstance(user_record, str):
@@ -181,7 +177,7 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ------------------------------------------------------------------------------
-# Prompt & retriever (with document_variable_name fix)
+# Prompt & retriever
 # ------------------------------------------------------------------------------
 qa_prompt = PromptTemplate(
     input_variables=["context", "question"],
@@ -240,66 +236,72 @@ Base your suggestions strictly on the retrieved information provided in the ANSW
     return llm.invoke(prompt).content
 
 # ------------------------------------------------------------------------------
-# D-ID integration (safe key print + clear errors)
+# D-ID Agents SDK embed (single video at top)
+#   - On each rerender, if st.session_state["speak_text"] is non-empty,
+#     the agent connects and speaks that text.
 # ------------------------------------------------------------------------------
-def generate_did_video(text: str):
-    # Always read from secrets at call time (works locally too if .env not set)
-    did_key = _get_secret("DID_API_KEY", "")
-    print(f"[DEBUG] Loaded D-ID key prefix: {did_key[:5]}...suffix: {did_key[-4:]}")
+from json import dumps as json_dumps
 
-    headers = {
-        "Authorization": f"Bearer {did_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "script": {
-            "type": "text",
-            "input": text,
-            "provider": {"type": "elevenlabs", "voice_id": "Rachel"},
-        },
-        "source_url": "https://create-images-results.d-id.com/DefaultPresenter.png",
-    }
+speak_text = st.session_state.get("speak_text", "")
+escaped_text = json_dumps(speak_text)  # safe for JS
 
-    try:
-        resp = requests.post("https://api.d-id.com/talks", json=payload, headers=headers)
-        resp.raise_for_status()
-        talk_id = resp.json().get("id")
+agent_html = f"""
+<div class="video-wrapper">
+  <video id="agent-video" autoplay muted playsinline></video>
+</div>
 
-        for _ in range(20):
-            chk = requests.get(f"https://api.d-id.com/talks/{talk_id}", headers=headers)
-            chk.raise_for_status()
-            data = chk.json()
-            if data.get("result_url"):
-                return data["result_url"]
-            time.sleep(1)
+<script type="module">
+  import * as sdk from "https://cdn.jsdelivr.net/npm/@d-id/client-sdk@latest/dist/index.min.js";
 
-        st.sidebar.error("Timed out waiting for video to be ready.")
-    except requests.exceptions.RequestException as e:
-        st.sidebar.error(f"🚨 D-ID request failed: {e}")
-        try:
-            st.sidebar.code(resp.text, language="json")
-        except Exception:
-            pass
-    return None
+  const videoEl = document.getElementById("agent-video");
+  let srcObjectRef = null;
 
-# ------------------------------------------------------------------------------
-# Single video container at the top
-# ------------------------------------------------------------------------------
-video_container = st.empty()
-if st.session_state["video_url"]:
-    video_container.markdown(
-        f"""
-        <div class="video-wrapper">
-            <video controls autoplay muted playsinline width="512">
-                <source src="{st.session_state["video_url"]}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.markdown('<div class="video-wrapper"><em>Waiting for your first question...</em></div>', unsafe_allow_html=True)
+  const callbacks = {{
+    onSrcObjectReady(value) {{
+      videoEl.srcObject = value;
+      srcObjectRef = value;
+      return value;
+    }},
+    onVideoStateChange(state) {{
+      console.log("D-ID onVideoStateChange:", state);
+      if (state === "STOP") {{
+        videoEl.srcObject = null;
+      }} else {{
+        videoEl.srcObject = srcObjectRef;
+      }}
+    }},
+    onConnectionStateChange(state) {{
+      console.log("D-ID onConnectionStateChange:", state);
+    }},
+    onNewMessage(messages, type) {{
+      console.log("D-ID onNewMessage:", type, messages);
+    }},
+    onError(error, data) {{
+      console.error("D-ID SDK Error:", error, data);
+    }},
+  }};
+
+  const auth = {{ type: "key", clientKey: "{DID_CLIENT_KEY}" }};
+  const streamOptions = {{ compatibilityMode: "auto", streamWarmup: true }};
+
+  (async () => {{
+    try {{
+      const agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
+      await agentManager.connect();
+
+      const text = {escaped_text};
+      if (text && text.length > 0) {{
+        await agentManager.speak({{ type: "text", input: text }});
+      }}
+    }} catch (e) {{
+      console.error("Failed to init D-ID agent:", e);
+    }}
+  }})();
+</script>
+"""
+
+# Render the agent video block (one window at the top)
+components.html(agent_html, height=420)
 
 # ------------------------------------------------------------------------------
 # Query input
@@ -314,34 +316,16 @@ if submitted:
         with st.spinner("Retrieving and formatting response..."):
             result = qa_chain({"query": cleaned_query})
             formatted = format_response(result["result"], cleaned_query)
-        with st.spinner("Generating video..."):
-            video_url = generate_did_video(formatted)
 
-        # Store + show debug instead of immediate rerun
-        st.session_state["video_url"] = video_url
+        # Save what the agent should speak and rerun to trigger the stream
         st.session_state["latest_question"] = cleaned_query
-        st.session_state["debug_formatted"] = formatted
-        st.session_state["debug_video_url"] = video_url
-        st.session_state["debug_ready"] = True
+        st.session_state["speak_text"] = formatted
+        st.rerun()
     else:
         st.warning("Please enter a valid question.")
 
 # ------------------------------------------------------------------------------
-# Debug sidebar (shows until you click Continue)
-# ------------------------------------------------------------------------------
-if st.session_state.get("debug_ready"):
-    with st.sidebar:
-        st.markdown("### 🔧 Debug Info")
-        st.markdown("**Formatted:**")
-        st.code(st.session_state.get("debug_formatted", ""), language="markdown")
-        st.markdown("**Video URL:**")
-        st.code(st.session_state.get("debug_video_url", "None"), language="text")
-        if st.button("Continue"):
-            st.session_state["debug_ready"] = False
-            st.rerun()
-
-# ------------------------------------------------------------------------------
-# Starter questions
+# Sample questions (optional)
 # ------------------------------------------------------------------------------
 with st.expander("Sample questions to get you started", expanded=False):
     for i, q in enumerate([
@@ -357,7 +341,7 @@ with st.expander("Sample questions to get you started", expanded=False):
 # Logout & Footer
 # ------------------------------------------------------------------------------
 if st.button("Logout", key="logout"):
-    for key in ["authenticated", "email", "video_url", "latest_question", "debug_ready", "debug_formatted", "debug_video_url"]:
+    for key in ["authenticated", "email", "latest_question", "speak_text"]:
         st.session_state.pop(key, None)
     st.rerun()
 
