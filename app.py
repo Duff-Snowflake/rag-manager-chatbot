@@ -72,18 +72,33 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
 .video-wrapper {
     display: flex; flex-direction: column; align-items: center; padding: 1rem 0;
 }
-video#agent-video {
+#agent-video {
     width: 100%;
-    max-width: 640px;          /* allow a bit larger player */
-    height: auto;              /* keep aspect ratio */
-    object-fit: contain;       /* avoid CSS cropping */
+    max-width: 640px;      /* larger player */
+    height: auto;
+    min-height: 360px;     /* reserve space so it never collapses */
+    object-fit: contain;   /* avoid cropping */
     border-radius: 12px;
     background: #000;
-    opacity: 0; animation: fadeIn 1s ease-in-out forwards;
+    opacity: 0; animation: fadeIn 0.6s ease-in-out forwards;
 }
 @keyframes fadeIn { to { opacity: 1; } }
-.video-tip {
-    text-align: center; font-size: 0.9rem; opacity: 0.8; margin-top: 0.25rem;
+.unmute-tip {
+    text-align: right;
+    width: 100%;
+    max-width: 640px;
+    margin: .25rem auto 0;
+}
+.unmute-btn {
+    display: inline-block;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #2b2d31;
+    color: #ddd;
+    border: 1px solid #3f4147;
+    cursor: pointer;
+    user-select: none;
 }
 </style>
 <div class="top-banner">
@@ -245,7 +260,7 @@ Base your suggestions strictly on the retrieved information provided in the ANSW
 
 # ------------------------------------------------------------------------------
 # D-ID Agents SDK embed (single video at top)
-#   - On each rerender, if st.session_state["speak_text"] is non-empty,
+#   - On each rerender, if st.session_state["speak_text"] has content,
 #     the agent connects and speaks that text.
 # ------------------------------------------------------------------------------
 from json import dumps as json_dumps
@@ -254,43 +269,8 @@ speak_text = st.session_state.get("speak_text", "")
 escaped_text = json_dumps(speak_text)
 
 agent_html = f"""
-<style>
-  .video-wrapper {{
-    display: flex; justify-content: center; padding: 1rem 0;
-  }}
-  #agent-video {{
-    width: 100%;
-    max-width: 640px;
-    aspect-ratio: 16 / 9;
-    border-radius: 12px;
-    background: #000;
-    object-fit: contain;         /* prevent cropping */
-    opacity: 0;
-    animation: fadeIn 0.6s ease-in-out forwards;
-  }}
-  .unmute-tip {{
-    position: relative;
-    width: 100%;
-    max-width: 640px;
-    margin: 0 auto;
-    text-align: right;
-    margin-top: .25rem;
-  }}
-  .unmute-btn {{
-    display: inline-block;
-    font-size: 12px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #2b2d31;
-    color: #ddd;
-    border: 1px solid #3f4147;
-    cursor: pointer;
-    user-select: none;
-  }}
-</style>
-
 <div class="video-wrapper">
-  <video id="agent-video" playsinline></video>
+  <video id="agent-video" muted playsinline></video>
 </div>
 <div class="unmute-tip">
   <span id="unmute-btn" class="unmute-btn" style="display:none;">🔊 Unmute</span>
@@ -304,7 +284,6 @@ agent_html = f"""
   let srcObjectRef = null;
   let agentManager = null;
 
-  // Show idle when stream stops; keep sizing stable
   const callbacks = {{
     onSrcObjectReady(value) {{
       videoEl.srcObject = value;
@@ -314,10 +293,10 @@ agent_html = f"""
     onVideoStateChange(state) {{
       console.log("D-ID onVideoStateChange:", state);
       if (state === "STOP") {{
-        // Fall back to idle video instead of black frame
+        // Show idle loop when speech ends
         videoEl.srcObject = null;
-        if (agentManager && agentManager.agent && agentManager.agent.presenter) {{
-          videoEl.src = agentManager.agent.presenter.idle_video || "";
+        if (agentManager?.agent?.presenter?.idle_video) {{
+          videoEl.src = agentManager.agent.presenter.idle_video;
         }}
       }} else {{
         videoEl.src = "";
@@ -338,13 +317,13 @@ agent_html = f"""
   const auth = {{ type: "key", clientKey: "{DID_CLIENT_KEY}" }};
   const streamOptions = {{
     compatibilityMode: "auto",
-    streamWarmup: false            // <— disable warmup (no close-up clip)
+    streamWarmup: false  // prevent the close-up warmup clip
   }};
 
-  // Unmute helper
   function showUnmuteTip() {{
     if (videoEl.muted) unmuteBtn.style.display = "inline-block";
   }}
+
   unmuteBtn.addEventListener("click", async () => {{
     try {{
       videoEl.muted = false;
@@ -357,27 +336,26 @@ agent_html = f"""
   (async () => {{
     try {{
       agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
+
+      // Show idle frame immediately to avoid black box before connect
+      if (agentManager?.agent?.presenter?.idle_video) {{
+        videoEl.src = agentManager.agent.presenter.idle_video;
+      }}
+
       await agentManager.connect();
 
-      // Attempt to unmute after user interaction; if blocked, show tip
+      // Try to enable sound (may be blocked by autoplay policy)
       try {{
         videoEl.muted = false;
         await videoEl.play();
       }} catch (e) {{
-        // Autoplay with sound likely blocked
         videoEl.muted = true;
         showUnmuteTip();
       }}
 
       const text = {escaped_text};
       if (text && text.length > 0) {{
-        // Speak the latest text
         await agentManager.speak({{ type: "text", input: text }});
-      }} else {{
-        // Show idle frame on first load
-        if (agentManager && agentManager.agent && agentManager.agent.presenter) {{
-          videoEl.src = agentManager.agent.presenter.idle_video || "";
-        }}
       }}
     }} catch (e) {{
       console.error("Failed to init D-ID agent:", e);
@@ -386,9 +364,8 @@ agent_html = f"""
 </script>
 """
 
-
-# Render the agent video block (one window at the top)
-components.html(agent_html, height=500)
+# Render the agent video block (single window at the top)
+components.html(agent_html, height=560)
 
 # ------------------------------------------------------------------------------
 # Query input
@@ -404,7 +381,6 @@ if submitted:
             result = qa_chain({"query": cleaned_query})
             formatted = format_response(result["result"], cleaned_query)
 
-        # Save what the agent should speak and rerun to trigger the stream
         st.session_state["latest_question"] = cleaned_query
         st.session_state["speak_text"] = formatted
         st.rerun()
