@@ -271,8 +271,7 @@ escaped_text = json_dumps(speak_text)  # safe for JS
 agent_html = f"""
 <style>
   .video-wrapper {{
-    display: flex; justify-content: center; padding: 1rem 0;
-    position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: .5rem; padding: 1rem 0;
   }}
   #agent-video {{
     width: 100%;
@@ -281,44 +280,64 @@ agent_html = f"""
     border-radius: 12px;
     background: #000;
     object-fit: contain;
-    opacity: 0; animation: fadeIn 0.6s ease-in-out forwards;
   }}
-  @keyframes fadeIn {{ to {{ opacity: 1; }} }}
-  .overlay-controls {{
-    position: absolute;
-    bottom: 12px;
-    right: 12px;
-    display: flex; gap: 8px;
+  .ui-row {{
+    width: 100%; max-width: 640px; display: flex; justify-content: space-between; gap: .5rem;
+    font-size: 0.9rem;
   }}
-  .overlay-btn {{
-    font-size: 12px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #2b2d31;
-    color: #ddd;
-    border: 1px solid #3f4147;
-    cursor: pointer;
-    user-select: none;
+  .pill {{
+    padding: 6px 10px; border-radius: 999px; background: #2b2d31; color: #ddd; border: 1px solid #3f4147;
   }}
+  .btn {{
+    padding: 8px 12px; border-radius: 8px; background: #40414f; color: #fff; border: 1px solid #565869; cursor: pointer;
+  }}
+  .btn:disabled {{ opacity: .6; cursor: not-allowed; }}
+  .mono {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }}
 </style>
 
 <div class="video-wrapper">
-  <video id="agent-video" controls playsinline></video>
-  <div class="overlay-controls">
-    <span id="play-btn" class="overlay-btn" style="display:none;">▶️ Play response</span>
-    <span id="unmute-btn" class="overlay-btn" style="display:none;">🔊 Unmute</span>
+  <video id="agent-video" playsinline></video>
+
+  <div class="ui-row">
+    <span id="status" class="pill">Status: init…</span>
+    <span id="unmute-tip" class="pill" style="display:none; cursor:pointer;">🔊 Unmute</span>
+  </div>
+
+  <div class="ui-row">
+    <button id="speak-btn" class="btn">▶️ Speak response</button>
+    <span id="error" class="pill" style="display:none;"></span>
+  </div>
+
+  <div class="ui-row mono" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+    <span>Text to speak:&nbsp;</span>
+    <span id="speak-preview" title="full text"></span>
   </div>
 </div>
 
 <script type="module">
   import * as sdk from "https://cdn.jsdelivr.net/npm/@d-id/client-sdk@latest/dist/index.min.js";
 
-  const videoEl   = document.getElementById("agent-video");
-  const playBtn   = document.getElementById("play-btn");
-  const unmuteBtn = document.getElementById("unmute-btn");
+  const videoEl = document.getElementById("agent-video");
+  const statusEl = document.getElementById("status");
+  const errorEl  = document.getElementById("error");
+  const unmuteEl = document.getElementById("unmute-tip");
+  const speakBtn = document.getElementById("speak-btn");
+  const speakPreview = document.getElementById("speak-preview");
 
   let srcObjectRef = null;
   let agentManager = null;
+
+  const text = {escaped_text} || "";
+  speakPreview.textContent = text.slice(0, 120) + (text.length > 120 ? " …" : "");
+
+  function setStatus(msg) {{
+    statusEl.textContent = "Status: " + msg;
+  }}
+  function setError(msg) {{
+    errorEl.style.display = "inline-block";
+    errorEl.textContent = "Error: " + (msg || "unknown");
+  }}
+  function hideError() {{ errorEl.style.display = "none"; }}
 
   const callbacks = {{
     onSrcObjectReady(value) {{
@@ -329,7 +348,7 @@ agent_html = f"""
     onVideoStateChange(state) {{
       console.log("D-ID onVideoStateChange:", state);
       if (state === "STOP") {{
-        // Show the agent's idle video (if available) so the frame doesn't go black
+        // show idle instead of black frame
         videoEl.srcObject = null;
         if (agentManager?.agent?.presenter?.idle_video) {{
           videoEl.src = agentManager.agent.presenter.idle_video;
@@ -341,12 +360,14 @@ agent_html = f"""
     }},
     onConnectionStateChange(state) {{
       console.log("D-ID onConnectionStateChange:", state);
+      setStatus(state);
     }},
     onNewMessage(messages, type) {{
       console.log("D-ID onNewMessage:", type, messages);
     }},
     onError(error, data) {{
       console.error("D-ID SDK Error:", error, data);
+      setError(error?.message || String(error));
     }},
   }};
 
@@ -356,62 +377,74 @@ agent_html = f"""
     streamWarmup: false
   }};
 
-  // Ensure the user can always unmute
-  function showUnmute() {{
-    if (videoEl.muted) unmuteBtn.style.display = "inline-block";
-  }}
-  unmuteBtn.addEventListener("click", async () => {{
+  // Unmute helper
+  unmuteEl.addEventListener("click", async () => {{
     try {{
       videoEl.muted = false;
-      await videoEl.play().catch(() => {{}});
+      await videoEl.play().catch(()=>{{}});
     }} finally {{
-      unmuteBtn.style.display = "none";
+      unmuteEl.style.display = "none";
     }}
   }});
 
-  // Click-to-play (satisfies autoplay policies)
-  async function playResponse(text) {{
+  async function ensureAudible() {{
     try {{
-      // Unmute if possible after user interaction
       videoEl.muted = false;
-      await videoEl.play().catch(() => {{}});
+      await videoEl.play();
     }} catch (e) {{
-      // If browser still blocks, show explicit unmute
+      // autoplay with sound blocked
       videoEl.muted = true;
-      showUnmute();
-    }}
-
-    if (text && text.length > 0) {{
-      await agentManager.speak({{ type: "text", input: text }});
+      unmuteEl.style.display = "inline-block";
     }}
   }}
 
-  (async () => {{
+  async function init() {{
     try {{
+      setStatus("connecting…");
+      hideError();
       agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
       await agentManager.connect();
+      setStatus("connected");
+      await ensureAudible();
 
-      // Show idle frame immediately on first load
+      // show idle on first load
       if (agentManager?.agent?.presenter?.idle_video) {{
         videoEl.src = agentManager.agent.presenter.idle_video;
       }}
 
-      const text = {escaped_text};
-      if (text && text.length > 0) {{
-        // Show an explicit "Play response" so audio is allowed to start
-        playBtn.style.display = "inline-block";
-        playBtn.onclick = async () => {{
-          playBtn.style.display = "none";
-          await playResponse(text);
-        }};
-      }}
+      // if we already have text (page rerender after submit), enable button
+      speakBtn.disabled = !text;
     }} catch (e) {{
       console.error("Failed to init D-ID agent:", e);
+      setError(e?.message || String(e));
+      setStatus("error");
     }}
-  }})();
+  }}
+
+  speakBtn.addEventListener("click", async () => {{
+    if (!agentManager) return;
+    hideError();
+    if (!text) {{
+      setError("No text to speak");
+      return;
+    }}
+    try {{
+      speakBtn.disabled = true;
+      setStatus("speaking…");
+      await agentManager.speak({{ type: "text", input: text }});
+      setStatus("connected");
+    }} catch (e) {{
+      console.error("Speak failed:", e);
+      setError(e?.message || String(e));
+      setStatus("error");
+    }} finally {{
+      speakBtn.disabled = false;
+    }}
+  }});
+
+  init();
 </script>
 """
-
 
 # Render the agent video block (single window at the top)
 components.html(agent_html, height=560)
