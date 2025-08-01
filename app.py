@@ -251,20 +251,60 @@ Base your suggestions strictly on the retrieved information provided in the ANSW
 from json import dumps as json_dumps
 
 speak_text = st.session_state.get("speak_text", "")
-escaped_text = json_dumps(speak_text)  # safe for JS
+escaped_text = json_dumps(speak_text)
 
 agent_html = f"""
+<style>
+  .video-wrapper {{
+    display: flex; justify-content: center; padding: 1rem 0;
+  }}
+  #agent-video {{
+    width: 100%;
+    max-width: 640px;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    background: #000;
+    object-fit: contain;         /* prevent cropping */
+    opacity: 0;
+    animation: fadeIn 0.6s ease-in-out forwards;
+  }}
+  .unmute-tip {{
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    text-align: right;
+    margin-top: .25rem;
+  }}
+  .unmute-btn {{
+    display: inline-block;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #2b2d31;
+    color: #ddd;
+    border: 1px solid #3f4147;
+    cursor: pointer;
+    user-select: none;
+  }}
+</style>
+
 <div class="video-wrapper">
-  <video id="agent-video" controls autoplay playsinline></video>
-  <div class="video-tip">Tip: click the speaker icon to unmute if your browser blocked autoplay audio.</div>
+  <video id="agent-video" playsinline></video>
+</div>
+<div class="unmute-tip">
+  <span id="unmute-btn" class="unmute-btn" style="display:none;">🔊 Unmute</span>
 </div>
 
 <script type="module">
   import * as sdk from "https://cdn.jsdelivr.net/npm/@d-id/client-sdk@latest/dist/index.min.js";
 
   const videoEl = document.getElementById("agent-video");
+  const unmuteBtn = document.getElementById("unmute-btn");
   let srcObjectRef = null;
+  let agentManager = null;
 
+  // Show idle when stream stops; keep sizing stable
   const callbacks = {{
     onSrcObjectReady(value) {{
       videoEl.srcObject = value;
@@ -274,8 +314,13 @@ agent_html = f"""
     onVideoStateChange(state) {{
       console.log("D-ID onVideoStateChange:", state);
       if (state === "STOP") {{
+        // Fall back to idle video instead of black frame
         videoEl.srcObject = null;
+        if (agentManager && agentManager.agent && agentManager.agent.presenter) {{
+          videoEl.src = agentManager.agent.presenter.idle_video || "";
+        }}
       }} else {{
+        videoEl.src = "";
         videoEl.srcObject = srcObjectRef;
       }}
     }},
@@ -291,16 +336,48 @@ agent_html = f"""
   }};
 
   const auth = {{ type: "key", clientKey: "{DID_CLIENT_KEY}" }};
-  const streamOptions = {{ compatibilityMode: "auto", streamWarmup: true }};
+  const streamOptions = {{
+    compatibilityMode: "auto",
+    streamWarmup: false            // <— disable warmup (no close-up clip)
+  }};
+
+  // Unmute helper
+  function showUnmuteTip() {{
+    if (videoEl.muted) unmuteBtn.style.display = "inline-block";
+  }}
+  unmuteBtn.addEventListener("click", async () => {{
+    try {{
+      videoEl.muted = false;
+      await videoEl.play().catch(() => {{}});
+    }} finally {{
+      unmuteBtn.style.display = "none";
+    }}
+  }});
 
   (async () => {{
     try {{
-      const agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
+      agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
       await agentManager.connect();
+
+      // Attempt to unmute after user interaction; if blocked, show tip
+      try {{
+        videoEl.muted = false;
+        await videoEl.play();
+      }} catch (e) {{
+        // Autoplay with sound likely blocked
+        videoEl.muted = true;
+        showUnmuteTip();
+      }}
 
       const text = {escaped_text};
       if (text && text.length > 0) {{
+        // Speak the latest text
         await agentManager.speak({{ type: "text", input: text }});
+      }} else {{
+        // Show idle frame on first load
+        if (agentManager && agentManager.agent && agentManager.agent.presenter) {{
+          videoEl.src = agentManager.agent.presenter.idle_video || "";
+        }}
       }}
     }} catch (e) {{
       console.error("Failed to init D-ID agent:", e);
@@ -308,6 +385,7 @@ agent_html = f"""
   }})();
 </script>
 """
+
 
 # Render the agent video block (one window at the top)
 components.html(agent_html, height=500)
