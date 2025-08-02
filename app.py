@@ -7,6 +7,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
+import re   # <-- add at top with other imports
+
 from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
@@ -205,9 +207,8 @@ if not st.session_state.authenticated:
 qa_prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-You are an assistant that answers questions strictly based on the provided context.
-If the context does not contain sufficient information to answer, respond with:
-"I do not have sufficient information on this topic in the current knowledge base. Please consult HR or an expert for guidance."
+You answer ONLY from the provided context. If the answer is not in the
+context, reply exactly: "THIS IS QUESTION IS OUTSIDE OF MY TRAINING". Do not add outside knowledge.
 
 Context:
 {context}
@@ -215,8 +216,8 @@ Context:
 Question:
 {question}
 
-Answer:
-""",
+Answer (from context or INSUFFICIENT):
+"""
 )
 
 try:
@@ -234,29 +235,47 @@ except Exception as e:
     st.stop()
 
 # ------------------------------------------------------------------------------
+# Define the sanitizer (near your other helpers)
+# ------------------------------------------------------------------------------
+def to_tts(text: str) -> str:
+    """Strip Markdown-ish symbols and extra whitespace for clean TTS."""
+    text = re.sub(r"[#*_`>•\-]+", " ", text)  # remove bullets/markdown chars
+    text = re.sub(r"\s+", " ", text).strip()  # collapse spaces
+    return text
+
+
+# ------------------------------------------------------------------------------
 # Response formatting (your coaching voice)
 # ------------------------------------------------------------------------------
-def format_response(base_answer, query):
+def format_response(base_answer: str, query: str) -> str:
+    """Return a short, speakable coaching answer grounded in base_answer."""
     prompt = f"""
-You are a management communication coach with deep expertise in attachment theory and interpersonal motivation.
+You are a management communication coach. Answer the manager's question
+using ONLY the information in ANSWER. If the ANSWER lacks info, say so
+briefly and suggest consulting HR or an expert.
 
-Imagine the following middle manager, who has little knowledge of psychology or communication theory, has asked you a question:
+AUDIENCE: busy middle manager with no psychology background.
+VOICE: calm, respectful, confident; like a soft-spoken, trusted field officer.
+STYLE: natural speech; short sentences; no jargon or labels.
+
+CONSTRAINTS (very important):
+- Max ~200 words total.
+- No markdown symbols (#, *, -, •, _, >, `).
+- No headings. No numbered or bulleted lists.
+- Include exactly 3 example phrases the manager could say. Format each as:
+  "Example phrase." Follow with a short why-it-works sentence that references attachment styles.
+- If information is insufficient, say: "I don't have enough to answer that
+  from this knowledge base." Then add one practical next step.
 
 QUERY: {query}
-ANSWER: {base_answer}
 
-Respond as if you're speaking directly to the manager in a conversational, coaching style.
+ANSWER (retrieved context; do not add outside knowledge):
+{base_answer}
 
-Base your suggestions strictly on the retrieved information provided in the ANSWER above. If the retrieved information does not sufficiently address the question, indicate that the current knowledge base does not cover this and suggest consulting HR or an expert. Do not invent answers or use general knowledge not contained in the retrieved material.
-
-1. Begin with a short, calm, and encouraging summary—spoken in the voice of a soft-spoken, respected military officer who inspires loyalty and confidence.
-2. Avoid jargon or labels. Keep it respectful and clear.
-3. Then give 4 example phrases, each like:
-[Number]. "[Example phrase]" – [why it works, in plain language]
-4. End with a brief reflective question about tone/word choice that builds safety and motivation.
-5. Write the full response as markdown.
+Now speak directly to the manager in one coherent, talk-ready response.
 """
-    return llm.invoke(prompt).content
+    return llm.invoke(prompt).content.strip()
+
 
 # ------------------------------------------------------------------------------
 # D-ID Agents SDK embed (single video at top)
@@ -474,7 +493,8 @@ if submitted:
             formatted = format_response(result["result"], cleaned_query)
 
         st.session_state["latest_question"] = cleaned_query
-        st.session_state["speak_text"] = formatted
+        spoken = to_tts(formatted)  # sanitize the formatted text for TTS
+        st.session_state["speak_text"] = spoken
         st.rerun()
     else:
         st.warning("Please enter a valid question.")
