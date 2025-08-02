@@ -264,175 +264,167 @@ Base your suggestions strictly on the retrieved information provided in the ANSW
 #     the agent connects and speaks that text.
 # ------------------------------------------------------------------------------
 from json import dumps as json_dumps
-
 speak_text = st.session_state.get("speak_text", "")
-escaped_text = json_dumps(speak_text)  # safe for JS string
+escaped_text = json_dumps(speak_text)  # safe JSON for JS
 
 agent_html = f"""
 <style>
   .video-wrapper {{
-    display:flex; flex-direction:column; align-items:center; gap:.5rem;
-    padding: 1rem 0;
+    display:flex; flex-direction:column; align-items:center; gap:.5rem; padding:1rem 0;
   }}
   #agent-video {{
-    width:100%; max-width:640px; aspect-ratio:16/9;
-    background:#000; border-radius:12px; object-fit:contain;
-    opacity:0; animation: fadeIn .6s ease-in-out forwards;
-  }}
-  #agent-status {{
-    font-size:.9rem; opacity:.85;
+    width:100%; max-width:640px; aspect-ratio:16/9; background:#000;
+    border-radius:12px; object-fit:contain; opacity:0; animation:fadeIn .6s ease forwards;
   }}
   @keyframes fadeIn {{ to {{ opacity:1; }} }}
+  .log {{
+    width:100%; max-width:640px; font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background:#1f2228; color:#d5d7db; border:1px solid #333; border-radius:8px; padding:.5rem; white-space:pre-wrap;
+  }}
+  .row {{ display:flex; gap:.5rem; align-items:center; }}
+  .chip {{ font-size:12px; padding:.25rem .5rem; border-radius:999px; border:1px solid #3f4147; background:#2b2d31; color:#ddd; }}
+  .btn  {{ cursor:pointer; user-select:none; }}
 </style>
 
 <div class="video-wrapper">
-  <video id="agent-video" playsinline muted></video>
-  <div id="agent-status">Status: idle</div>
+  <video id="agent-video" muted autoplay playsinline></video>  <!-- muted enables autoplay -->
+  <div class="row">
+    <span id="status" class="chip">Status: init</span>
+    <span id="error"  class="chip" style="display:none;"></span>
+    <span id="connect-btn" class="chip btn">🔌 Connect</span>
+    <span id="speak-btn"   class="chip btn">🗣️ Speak</span>
+  </div>
+  <div id="log" class="log"></div>
 </div>
 
 <script type="module">
   import * as sdk from "https://cdn.jsdelivr.net/npm/@d-id/client-sdk@latest/dist/index.min.js";
 
   const videoEl   = document.getElementById("agent-video");
-  const statusEl  = document.getElementById("agent-status");
+  const statusEl  = document.getElementById("status");
+  const errorEl   = document.getElementById("error");
+  const connectEl = document.getElementById("connect-btn");
+  const speakEl   = document.getElementById("speak-btn");
+  const logEl     = document.getElementById("log");
 
-  // Persist across reruns:
-  // window.__didAgent: sdk agentManager instance
-  // window.__didConnectPromise: in-flight connection promise
-  // window.__didSrcObject: last srcObject
+  let srcObjectRef = null;
+  let agentManager = null;
+  let connected    = false;
+
+  const log = (msg) => {{ logEl.textContent += (msg + "\\n"); logEl.scrollTop = logEl.scrollHeight; }};
+  const setStatus = (s) => {{ statusEl.textContent = "Status: " + s; }};
+  const setError  = (e) => {{
+    if (!e) {{ errorEl.style.display = "none"; errorEl.textContent = ""; return; }}
+    errorEl.style.display = "inline-block";
+    errorEl.textContent = "Error: " + (typeof e === 'string' ? e : JSON.stringify(e));
+  }};
+
+  // --- sanitize/trim text for TTS
+  const rawText = {escaped_text} || "";
+  const sanitized = rawText
+    .replace(/[*_`>#-]/g, " ")   // strip simple markdown chars
+    .replace(/\\s+/g, " ")       // collapse whitespace/newlines
+    .trim()
+    .slice(0, 900);              // keep it reasonable
+
+  const callbacks = {{
+    onSrcObjectReady(value) {{
+      log("onSrcObjectReady");
+      srcObjectRef = value;
+      try {{
+        videoEl.srcObject = value;
+        // keep it muted for autoplay to succeed
+        videoEl.muted = true;
+        videoEl.play().catch(()=>{{}});
+      }} catch(e) {{
+        setError(e);
+        log("Error attaching srcObject: " + e);
+      }}
+      return value;
+    }},
+    onVideoStateChange(state) {{
+      log("onVideoStateChange: " + state);
+      if (state === "STOP") {{
+        // show idle preview if available
+        if (agentManager?.agent?.presenter?.idle_video) {{
+          videoEl.srcObject = null;
+          videoEl.src = agentManager.agent.presenter.idle_video;
+        }}
+      }} else {{
+        // use stream
+        if (srcObjectRef) {{
+          videoEl.src = "";
+          videoEl.srcObject = srcObjectRef;
+          videoEl.play().catch(()=>{{}});
+        }}
+      }}
+    }},
+    onConnectionStateChange(state) {{
+      log("onConnectionStateChange: " + state);
+      setStatus(state);
+      connected = (state === "connected");
+      if (connected && sanitized) {{
+        // small delay lets the pipeline warm up
+        setTimeout(()=> speakNow(sanitized), 250);
+      }}
+    }},
+    onNewMessage(messages, type) {{
+      log("onNewMessage: " + type);
+    }},
+    onError(error, data) {{
+      log("SDK onError: " + JSON.stringify(error));
+      setError(error?.description || error);
+    }},
+  }};
 
   const auth = {{ type: "key", clientKey: "{DID_CLIENT_KEY}" }};
   const streamOptions = {{ compatibilityMode: "auto", streamWarmup: false }};
 
-  function setStatus(msg) {{
-    statusEl.textContent = "Status: " + msg;
-    console.log("[D-ID]", msg);
+  async function ensureConnected() {{
+    if (connected) return;
+    setError("");
+    setStatus("connecting");
+    log("creating agentManager…");
+    agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
+    await agentManager.connect(); // triggers onConnectionStateChange
   }}
 
-  function sanitize(text) {{
-    if (!text) return "";
-    // Strip markdown emphasis/headings/backticks; collapse whitespace; clamp length
-    let t = text.replace(/[*#`_>]/g, " ").replace(/\\s+/g, " ").trim();
-    const MAX = 900;  // keep it reasonable for TTS
-    if (t.length > MAX) t = t.slice(0, MAX) + "...";
-    return t;
-  }}
-
-  const callbacks = {{
-    onSrcObjectReady(value) {{
-      window.__didSrcObject = value;
-      videoEl.srcObject = value;
-      return value;
-    }},
-    onVideoStateChange(state) {{
-      setStatus("video " + state.toLowerCase());
-      if (state === "STOP") {{
-        // keep last frame; avoid blanking to reduce flicker
-        // optional: show idle clip if available
+  async function speakNow(text) {{
+    if (!connected) {{ setError("Please connect to the agent first"); return; }}
+    setError(""); log("speak() starting");
+    try {{
+      // make sure we’re showing the stream
+      if (srcObjectRef) {{
+        videoEl.src = "";
+        videoEl.srcObject = srcObjectRef;
+        videoEl.play().catch(()=>{{}});
       }}
-    }},
-    onConnectionStateChange(state) {{
-      setStatus("connection " + state);
-    }},
-    onNewMessage(messages, type) {{
-      console.log("[D-ID] messages:", type, messages);
-    }},
-    onError(error, data) {{
-      console.error("[D-ID] error:", error, data);
-      setStatus("error");
-    }},
+      await agentManager.speak({{ type: "text", input: text }});
+      log("speak() finished");
+    }} catch (e) {{
+      setError(e?.description || e);
+      log("speak() error: " + JSON.stringify(e));
+    }}
+  }}
+
+  // UI buttons for manual control & debugging
+  connectEl.onclick = async () => {{
+    try {{ await ensureConnected(); }} catch(e) {{ setError(e); log("connect error: " + e); }}
+  }};
+  speakEl.onclick = async () => {{
+    try {{ await speakNow(sanitized || "Hello there, this is a short test."); }} catch(e) {{ setError(e); }}
   }};
 
-  async function getOrCreateAgent() {{
-    if (!window.__didAgent) {{
-      setStatus("creating agent manager");
-      window.__didAgent = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
-    }}
-    return window.__didAgent;
-  }}
-
-  async function ensureConnected() {{
-    const agent = await getOrCreateAgent();
-
-    // if a connect() is already running, await it
-    if (window.__didConnectPromise) {{
-      setStatus("awaiting existing connect()");
-      await window.__didConnectPromise.catch(()=>{{}});
-      window.__didConnectPromise = null;
-    }}
-
-    // Try a lightweight check: some SDKs expose connection state on the manager; if not, just attempt reconnect
-    // We simply attempt connect() and swallow "already connected" scenarios.
-    setStatus("connecting");
-    window.__didConnectPromise = agent.connect();
-    try {{
-      await window.__didConnectPromise;
-      setStatus("connected");
-    }} catch (e) {{
-      console.warn("[D-ID] connect failed; retrying reconnect()", e);
-      // try reconnect() once
-      try {{
-        await agent.reconnect();
-        setStatus("connected");
-      }} catch (e2) {{
-        setStatus("error: unable to connect");
-        throw e2;
-      }}
-    }} finally {{
-      window.__didConnectPromise = null;
-    }}
-
-    // Autoplay policy: unmute if allowed; otherwise keep muted
-    try {{
-      videoEl.muted = false;
-      await videoEl.play();
-    }} catch {{
-      videoEl.muted = true;
-      // keep muted – user can toggle via video controls if you add them
-    }}
-
-    return agent;
-  }}
-
-  async function speak(text) {{
-    const clean = sanitize(text);
-    if (!clean) {{
-      setStatus("nothing to say");
-      return;
-    }}
-    const agent = await ensureConnected();
-    setStatus("speaking");
-    try {{
-      await agent.speak({{ type: "text", input: clean }});
-      setStatus("spoken");
-    }} catch (e) {{
-      console.error("[D-ID] speak failed:", e);
-      // session may have expired – try once more after reconnect
-      try {{
-        setStatus("reconnecting then retrying speak");
-        await agent.reconnect();
-        await agent.speak({{ type: "text", input: clean }});
-        setStatus("spoken");
-      }} catch (e2) {{
-        console.error("[D-ID] speak retry failed:", e2);
-        setStatus("error: speak failed");
-      }}
-    }}
-  }}
-
-  // -------- Auto-run on page load if Streamlit gave us text --------
-  const incoming = {escaped_text};
+  // Auto-connect on load; auto-speak if we have text
   (async () => {{
     try {{
-      if (incoming && incoming.length > 0) {{
-        await speak(incoming);
-      }} else {{
-        // no text – just connect once so the player is “ready”
-        await ensureConnected();
+      await ensureConnected();
+      if (sanitized) {{
+        setTimeout(()=> speakNow(sanitized), 300);
       }}
-    }} catch (e) {{
-      console.error("[D-ID] init flow failed:", e);
-      setStatus("error");
+    }} catch(e) {{
+      setError(e);
+      log("auto init error: " + e);
     }}
   }})();
 </script>
