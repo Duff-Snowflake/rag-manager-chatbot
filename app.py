@@ -266,170 +266,175 @@ Base your suggestions strictly on the retrieved information provided in the ANSW
 from json import dumps as json_dumps
 
 speak_text = st.session_state.get("speak_text", "")
-escaped_text = json_dumps(speak_text)
+escaped_text = json_dumps(speak_text)  # safe for JS string
 
 agent_html = f"""
 <style>
   .video-wrapper {{
-    display:flex; flex-direction:column; align-items:center; gap:.5rem; padding:.75rem 0;
+    display:flex; flex-direction:column; align-items:center; gap:.5rem;
+    padding: 1rem 0;
   }}
   #agent-video {{
-    width:100%; max-width:640px; aspect-ratio:16/9; background:#000; border-radius:12px;
+    width:100%; max-width:640px; aspect-ratio:16/9;
+    background:#000; border-radius:12px; object-fit:contain;
+    opacity:0; animation: fadeIn .6s ease-in-out forwards;
   }}
-  .controls-row {{ display:flex; gap:.5rem; align-items:center; max-width:640px; width:100%; flex-wrap:wrap; }}
-  .pill {{ font-size:.85rem; padding:.35rem .6rem; border-radius:999px; border:1px solid #3f4147; background:#2b2d31; color:#ddd; }}
-  .btn  {{ cursor:pointer; user-select:none; }}
-  .status-ok {{ color:#9be69b; }}
-  .status-err {{ color:#ff9aa2; }}
-  code.min {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }}
+  #agent-status {{
+    font-size:.9rem; opacity:.85;
+  }}
+  @keyframes fadeIn {{ to {{ opacity:1; }} }}
 </style>
 
 <div class="video-wrapper">
   <video id="agent-video" playsinline muted></video>
-
-  <div class="controls-row">
-    <span id="status" class="pill">Status: <em>idle</em></span>
-    <span id="error" class="pill status-err" style="display:none"></span>
-  </div>
-
-  <div class="controls-row">
-    <span id="connect" class="pill btn">🔌 Connect</span>
-    <span id="unmute"  class="pill btn" style="display:none">🔊 Unmute</span>
-    <span id="speak"   class="pill btn">▶️ Speak response</span>
-  </div>
-
-  <div class="controls-row" style="opacity:.7;">Text to speak:&nbsp;
-    <code class="min">{escaped_text}</code>
-  </div>
+  <div id="agent-status">Status: idle</div>
 </div>
 
 <script type="module">
   import * as sdk from "https://cdn.jsdelivr.net/npm/@d-id/client-sdk@latest/dist/index.min.js";
 
   const videoEl   = document.getElementById("agent-video");
-  const statusEl  = document.getElementById("status");
-  const errorEl   = document.getElementById("error");
-  const unmuteEl  = document.getElementById("unmute");
-  const speakEl   = document.getElementById("speak");
-  const connectEl = document.getElementById("connect");
+  const statusEl  = document.getElementById("agent-status");
 
-  let agentManager = null;
-  let srcObjectRef = null;
-  let isConnected  = false;
-  const speakText  = {escaped_text};
+  // Persist across reruns:
+  // window.__didAgent: sdk agentManager instance
+  // window.__didConnectPromise: in-flight connection promise
+  // window.__didSrcObject: last srcObject
 
-  function setStatus(text, ok=true) {{
-    statusEl.innerHTML = "Status: " + text;
-    statusEl.classList.toggle("status-ok", ok);
-    statusEl.classList.toggle("status-err", !ok);
-  }}
-  function showError(msg) {{
-    if (!msg) return;
-    errorEl.style.display = "inline-block";
-    errorEl.textContent = msg;
-  }}
-  function clearError() {{
-    errorEl.style.display = "none";
-    errorEl.textContent = "";
+  const auth = {{ type: "key", clientKey: "{DID_CLIENT_KEY}" }};
+  const streamOptions = {{ compatibilityMode: "auto", streamWarmup: false }};
+
+  function setStatus(msg) {{
+    statusEl.textContent = "Status: " + msg;
+    console.log("[D-ID]", msg);
   }}
 
-  async function tryUnmute() {{
-    try {{
-      videoEl.muted = false;
-      await videoEl.play();
-      unmuteEl.style.display = "none";
-    }} catch (e) {{
-      // Autoplay with sound blocked: keep muted, show button
-      videoEl.muted = true;
-      unmuteEl.style.display = "inline-block";
-    }}
+  function sanitize(text) {{
+    if (!text) return "";
+    // Strip markdown emphasis/headings/backticks; collapse whitespace; clamp length
+    let t = text.replace(/[*#`_>]/g, " ").replace(/\\s+/g, " ").trim();
+    const MAX = 900;  // keep it reasonable for TTS
+    if (t.length > MAX) t = t.slice(0, MAX) + "...";
+    return t;
   }}
-  unmuteEl.addEventListener("click", tryUnmute);
-
-  speakEl.addEventListener("click", async () => {{
-    clearError();
-    if (!isConnected || !agentManager) {{
-      showError("Please connect to the agent first");
-      return;
-    }}
-    if (!speakText || speakText.length === 0) {{
-      showError("No text to speak");
-      return;
-    }}
-    setStatus("speaking…");
-    try {{
-      await agentManager.speak({{ type:"text", input:speakText }});
-      setStatus("connected");
-    }} catch (e) {{
-      console.error("speak() error:", e);
-      showError(e?.description || e?.message || "Speak failed");
-      setStatus("error", false);
-    }}
-  }});
 
   const callbacks = {{
     onSrcObjectReady(value) {{
-      srcObjectRef = value;
+      window.__didSrcObject = value;
       videoEl.srcObject = value;
       return value;
     }},
     onVideoStateChange(state) {{
-      console.log("onVideoStateChange:", state);
+      setStatus("video " + state.toLowerCase());
       if (state === "STOP") {{
-        videoEl.srcObject = null;
-        if (agentManager?.agent?.presenter?.idle_video) {{
-          videoEl.src = agentManager.agent.presenter.idle_video;
-        }}
-      }} else {{
-        videoEl.src = "";
-        videoEl.srcObject = srcObjectRef;
+        // keep last frame; avoid blanking to reduce flicker
+        // optional: show idle clip if available
       }}
     }},
     onConnectionStateChange(state) {{
-      console.log("onConnectionStateChange:", state);
-      if (state === "connected") {{
-        isConnected = true;
-        setStatus("connected");
-        tryUnmute();
-        // Auto-speak once on connect if we have text
-        if (speakText && !window.__didAutoSpeak) {{
-          window.__didAutoSpeak = true;
-          speakEl.click();
-        }}
-      }} else {{
-        setStatus(state, state !== "error");
-      }}
+      setStatus("connection " + state);
+    }},
+    onNewMessage(messages, type) {{
+      console.log("[D-ID] messages:", type, messages);
     }},
     onError(error, data) {{
-      console.error("D-ID SDK Error:", error, data);
-      showError(error?.description || error?.message || "SDK error");
-      setStatus("error", false);
+      console.error("[D-ID] error:", error, data);
+      setStatus("error");
     }},
   }};
 
-  const auth = {{ type:"key", clientKey:"{DID_CLIENT_KEY}" }};
-  const streamOptions = {{ compatibilityMode:"auto", streamWarmup:false }};
+  async function getOrCreateAgent() {{
+    if (!window.__didAgent) {{
+      setStatus("creating agent manager");
+      window.__didAgent = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
+    }}
+    return window.__didAgent;
+  }}
 
-  async function connectOnce() {{
-    clearError();
-    setStatus("connecting…");
+  async function ensureConnected() {{
+    const agent = await getOrCreateAgent();
+
+    // if a connect() is already running, await it
+    if (window.__didConnectPromise) {{
+      setStatus("awaiting existing connect()");
+      await window.__didConnectPromise.catch(()=>{{}});
+      window.__didConnectPromise = null;
+    }}
+
+    // Try a lightweight check: some SDKs expose connection state on the manager; if not, just attempt reconnect
+    // We simply attempt connect() and swallow "already connected" scenarios.
+    setStatus("connecting");
+    window.__didConnectPromise = agent.connect();
     try {{
-      if (!agentManager) {{
-        agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
-      }}
-      await agentManager.connect();   // If a session was stale, SDK will create a new one
+      await window.__didConnectPromise;
+      setStatus("connected");
     }} catch (e) {{
-      console.error("connect() error:", e);
-      showError(e?.description || e?.message || "Connect failed");
-      setStatus("error", false);
+      console.warn("[D-ID] connect failed; retrying reconnect()", e);
+      // try reconnect() once
+      try {{
+        await agent.reconnect();
+        setStatus("connected");
+      }} catch (e2) {{
+        setStatus("error: unable to connect");
+        throw e2;
+      }}
+    }} finally {{
+      window.__didConnectPromise = null;
+    }}
+
+    // Autoplay policy: unmute if allowed; otherwise keep muted
+    try {{
+      videoEl.muted = false;
+      await videoEl.play();
+    }} catch {{
+      videoEl.muted = true;
+      // keep muted – user can toggle via video controls if you add them
+    }}
+
+    return agent;
+  }}
+
+  async function speak(text) {{
+    const clean = sanitize(text);
+    if (!clean) {{
+      setStatus("nothing to say");
+      return;
+    }}
+    const agent = await ensureConnected();
+    setStatus("speaking");
+    try {{
+      await agent.speak({{ type: "text", input: clean }});
+      setStatus("spoken");
+    }} catch (e) {{
+      console.error("[D-ID] speak failed:", e);
+      // session may have expired – try once more after reconnect
+      try {{
+        setStatus("reconnecting then retrying speak");
+        await agent.reconnect();
+        await agent.speak({{ type: "text", input: clean }});
+        setStatus("spoken");
+      }} catch (e2) {{
+        console.error("[D-ID] speak retry failed:", e2);
+        setStatus("error: speak failed");
+      }}
     }}
   }}
 
-  // Let the user explicitly start the connection and also retry on demand
-  connectEl.addEventListener("click", connectOnce);
-
-  // Optional: try once automatically on load, but the user can always retry
-  connectOnce();
+  // -------- Auto-run on page load if Streamlit gave us text --------
+  const incoming = {escaped_text};
+  (async () => {{
+    try {{
+      if (incoming && incoming.length > 0) {{
+        await speak(incoming);
+      }} else {{
+        // no text – just connect once so the player is “ready”
+        await ensureConnected();
+      }}
+    }} catch (e) {{
+      console.error("[D-ID] init flow failed:", e);
+      setStatus("error");
+    }}
+  }})();
 </script>
 """
 
