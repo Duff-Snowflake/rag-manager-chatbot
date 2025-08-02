@@ -277,23 +277,37 @@ agent_html = f"""
     border-radius:12px; object-fit:contain; opacity:0; animation:fadeIn .6s ease forwards;
   }}
   @keyframes fadeIn {{ to {{ opacity:1; }} }}
+  .row {{ display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }}
+  .chip {{ font-size:12px; padding:.25rem .5rem; border-radius:999px; border:1px solid #3f4147; background:#2b2d31; color:#ddd; }}
+  .btn  {{ cursor:pointer; user-select:none; }}
   .log {{
     width:100%; max-width:640px; font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
     background:#1f2228; color:#d5d7db; border:1px solid #333; border-radius:8px; padding:.5rem; white-space:pre-wrap;
   }}
-  .row {{ display:flex; gap:.5rem; align-items:center; }}
-  .chip {{ font-size:12px; padding:.25rem .5rem; border-radius:999px; border:1px solid #3f4147; background:#2b2d31; color:#ddd; }}
-  .btn  {{ cursor:pointer; user-select:none; }}
+  .controls {{ display:flex; gap:.75rem; align-items:center; width:100%; max-width:640px; }}
+  .spacer {{ flex:1; }}
 </style>
 
 <div class="video-wrapper">
-  <video id="agent-video" muted autoplay playsinline></video>  <!-- muted enables autoplay -->
-  <div class="row">
-    <span id="status" class="chip">Status: init</span>
-    <span id="error"  class="chip" style="display:none;"></span>
-    <span id="connect-btn" class="chip btn">🔌 Connect</span>
-    <span id="speak-btn"   class="chip btn">🗣️ Speak</span>
+  <video id="agent-video" muted autoplay playsinline></video>
+
+  <div class="controls">
+    <div class="row">
+      <span id="status" class="chip">Status: init</span>
+      <span id="error"  class="chip" style="display:none;"></span>
+      <span id="connect-btn" class="chip btn">🔌 Connect</span>
+      <span id="speak-btn"   class="chip btn">🗣️ Speak</span>
+      <span id="unmute-btn"  class="chip btn" style="display:none;">🔊 Unmute</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="row">
+      <span class="chip">Vol</span>
+      <input id="vol" type="range" min="0" max="1" step="0.05" value="0.8" style="accent-color:#6ea8fe;">
+      <span id="tracks" class="chip">audio tracks: 0</span>
+      <span id="muted"  class="chip">muted</span>
+    </div>
   </div>
+
   <div id="log" class="log"></div>
 </div>
 
@@ -305,6 +319,10 @@ agent_html = f"""
   const errorEl   = document.getElementById("error");
   const connectEl = document.getElementById("connect-btn");
   const speakEl   = document.getElementById("speak-btn");
+  const unmuteEl  = document.getElementById("unmute-btn");
+  const volEl     = document.getElementById("vol");
+  const tracksEl  = document.getElementById("tracks");
+  const mutedEl   = document.getElementById("muted");
   const logEl     = document.getElementById("log");
 
   let srcObjectRef = null;
@@ -319,13 +337,19 @@ agent_html = f"""
     errorEl.textContent = "Error: " + (typeof e === 'string' ? e : JSON.stringify(e));
   }};
 
-  // --- sanitize/trim text for TTS
+  const updateAudioUI = () => {{
+    try {{
+      const n = videoEl?.srcObject?.getAudioTracks().length || 0;
+      tracksEl.textContent = "audio tracks: " + n;
+    }} catch {{ tracksEl.textContent = "audio tracks: 0"; }}
+    mutedEl.textContent = videoEl.muted ? "muted" : "unmuted";
+    // Show unmute button if muted or if no user gesture succeeded
+    unmuteEl.style.display = videoEl.muted ? "inline-block" : "none";
+  }};
+
+  // sanitize/trim text for TTS
   const rawText = {escaped_text} || "";
-  const sanitized = rawText
-    .replace(/[*_`>#-]/g, " ")   // strip simple markdown chars
-    .replace(/\\s+/g, " ")       // collapse whitespace/newlines
-    .trim()
-    .slice(0, 900);              // keep it reasonable
+  const sanitized = rawText.replace(/[*_`>#-]/g, " ").replace(/\\s+/g, " ").trim().slice(0, 900);
 
   const callbacks = {{
     onSrcObjectReady(value) {{
@@ -333,48 +357,41 @@ agent_html = f"""
       srcObjectRef = value;
       try {{
         videoEl.srcObject = value;
-        // keep it muted for autoplay to succeed
-        videoEl.muted = true;
+        videoEl.volume = parseFloat(volEl.value || "0.8");
+        videoEl.muted = true;   // start muted to satisfy autoplay
         videoEl.play().catch(()=>{{}});
       }} catch(e) {{
-        setError(e);
-        log("Error attaching srcObject: " + e);
+        setError(e); log("attach srcObject error: " + e);
       }}
+      updateAudioUI();
       return value;
     }},
     onVideoStateChange(state) {{
       log("onVideoStateChange: " + state);
       if (state === "STOP") {{
-        // show idle preview if available
         if (agentManager?.agent?.presenter?.idle_video) {{
           videoEl.srcObject = null;
           videoEl.src = agentManager.agent.presenter.idle_video;
         }}
       }} else {{
-        // use stream
         if (srcObjectRef) {{
           videoEl.src = "";
           videoEl.srcObject = srcObjectRef;
           videoEl.play().catch(()=>{{}});
         }}
       }}
+      updateAudioUI();
     }},
     onConnectionStateChange(state) {{
       log("onConnectionStateChange: " + state);
       setStatus(state);
       connected = (state === "connected");
       if (connected && sanitized) {{
-        // small delay lets the pipeline warm up
         setTimeout(()=> speakNow(sanitized), 250);
       }}
     }},
-    onNewMessage(messages, type) {{
-      log("onNewMessage: " + type);
-    }},
-    onError(error, data) {{
-      log("SDK onError: " + JSON.stringify(error));
-      setError(error?.description || error);
-    }},
+    onNewMessage(messages, type) {{ log("onNewMessage: " + type); }},
+    onError(error, data) {{ setError(error?.description || error); log("SDK onError: " + JSON.stringify(error)); }},
   }};
 
   const auth = {{ type: "key", clientKey: "{DID_CLIENT_KEY}" }};
@@ -382,49 +399,58 @@ agent_html = f"""
 
   async function ensureConnected() {{
     if (connected) return;
-    setError("");
-    setStatus("connecting");
+    setError(""); setStatus("connecting");
     log("creating agentManager…");
     agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
-    await agentManager.connect(); // triggers onConnectionStateChange
+    await agentManager.connect();
+  }}
+
+  async function tryUnmute() {{
+    try {{
+      videoEl.muted = false;
+      await videoEl.play();
+      log("unmuted & playing");
+    }} catch (e) {{
+      // if autoplay with sound is blocked, we’ll keep showing the button
+      log("unmute attempt failed (likely autoplay policy): " + e);
+      videoEl.muted = true;
+    }}
+    updateAudioUI();
   }}
 
   async function speakNow(text) {{
     if (!connected) {{ setError("Please connect to the agent first"); return; }}
     setError(""); log("speak() starting");
     try {{
-      // make sure we’re showing the stream
       if (srcObjectRef) {{
-        videoEl.src = "";
-        videoEl.srcObject = srcObjectRef;
-        videoEl.play().catch(()=>{{}});
+        videoEl.src = ""; videoEl.srcObject = srcObjectRef; videoEl.play().catch(()=>{{}});
       }}
       await agentManager.speak({{ type: "text", input: text }});
       log("speak() finished");
+      updateAudioUI();
     }} catch (e) {{
-      setError(e?.description || e);
-      log("speak() error: " + JSON.stringify(e));
+      setError(e?.description || e); log("speak() error: " + JSON.stringify(e));
     }}
   }}
 
-  // UI buttons for manual control & debugging
-  connectEl.onclick = async () => {{
-    try {{ await ensureConnected(); }} catch(e) {{ setError(e); log("connect error: " + e); }}
-  }};
-  speakEl.onclick = async () => {{
-    try {{ await speakNow(sanitized || "Hello there, this is a short test."); }} catch(e) {{ setError(e); }}
-  }};
+  // UI handlers
+  connectEl.onclick = async () => {{ try {{ await ensureConnected(); }} catch(e) {{ setError(e); log("connect error: " + e); }} }};
+  speakEl.onclick   = async () => {{ try {{ await speakNow(sanitized || "Hello, this is a short audio test."); }} catch(e) {{ setError(e); }} }};
+  unmuteEl.onclick  = async () => {{ await tryUnmute(); }};
+  volEl.oninput     = () => {{ videoEl.volume = parseFloat(volEl.value || "0.8"); }};
+
+  // Add a generic user-gesture hook: first click anywhere on video tries to unmute
+  videoEl.addEventListener("click", tryUnmute, {{ once:true }});
 
   // Auto-connect on load; auto-speak if we have text
   (async () => {{
     try {{
       await ensureConnected();
-      if (sanitized) {{
-        setTimeout(()=> speakNow(sanitized), 300);
-      }}
+      // after connect, try to unmute (may still be blocked until user gesture)
+      await tryUnmute();
+      if (sanitized) setTimeout(()=> speakNow(sanitized), 300);
     }} catch(e) {{
-      setError(e);
-      log("auto init error: " + e);
+      setError(e); log("auto init error: " + e);
     }}
   }})();
 </script>
