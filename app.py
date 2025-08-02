@@ -266,41 +266,40 @@ Base your suggestions strictly on the retrieved information provided in the ANSW
 from json import dumps as json_dumps
 
 speak_text = st.session_state.get("speak_text", "")
-escaped_text = json_dumps(speak_text)  # safe for JS template
+escaped_text = json_dumps(speak_text)
 
 agent_html = f"""
 <style>
   .video-wrapper {{
-    display:flex; flex-direction:column; align-items:center; gap:.5rem; padding: .75rem 0;
+    display:flex; flex-direction:column; align-items:center; gap:.5rem; padding:.75rem 0;
   }}
   #agent-video {{
     width:100%; max-width:640px; aspect-ratio:16/9; background:#000; border-radius:12px;
   }}
-  .controls-row {{
-    display:flex; gap:.5rem; align-items:center; max-width:640px; width:100%;
-  }}
-  .pill {{
-    font-size:.85rem; padding:.35rem .6rem; border-radius:999px; border:1px solid #3f4147; background:#2b2d31; color:#ddd;
-  }}
-  .btn {{
-    cursor:pointer; user-select:none;
-  }}
+  .controls-row {{ display:flex; gap:.5rem; align-items:center; max-width:640px; width:100%; flex-wrap:wrap; }}
+  .pill {{ font-size:.85rem; padding:.35rem .6rem; border-radius:999px; border:1px solid #3f4147; background:#2b2d31; color:#ddd; }}
+  .btn  {{ cursor:pointer; user-select:none; }}
   .status-ok {{ color:#9be69b; }}
   .status-err {{ color:#ff9aa2; }}
+  code.min {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }}
 </style>
 
 <div class="video-wrapper">
   <video id="agent-video" playsinline muted></video>
 
   <div class="controls-row">
-    <span id="status" class="pill">Status: <em>starting…</em></span>
+    <span id="status" class="pill">Status: <em>idle</em></span>
     <span id="error" class="pill status-err" style="display:none"></span>
-    <span id="unmute" class="pill btn" style="display:none">🔊 Unmute</span>
-    <span id="speak"  class="pill btn">▶️ Speak response</span>
+  </div>
+
+  <div class="controls-row">
+    <span id="connect" class="pill btn">🔌 Connect</span>
+    <span id="unmute"  class="pill btn" style="display:none">🔊 Unmute</span>
+    <span id="speak"   class="pill btn">▶️ Speak response</span>
   </div>
 
   <div class="controls-row" style="opacity:.7;">Text to speak:&nbsp;
-    <code style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">{escaped_text}</code>
+    <code class="min">{escaped_text}</code>
   </div>
 </div>
 
@@ -312,6 +311,7 @@ agent_html = f"""
   const errorEl   = document.getElementById("error");
   const unmuteEl  = document.getElementById("unmute");
   const speakEl   = document.getElementById("speak");
+  const connectEl = document.getElementById("connect");
 
   let agentManager = null;
   let srcObjectRef = null;
@@ -323,12 +323,11 @@ agent_html = f"""
     statusEl.classList.toggle("status-ok", ok);
     statusEl.classList.toggle("status-err", !ok);
   }}
-
   function showError(msg) {{
+    if (!msg) return;
     errorEl.style.display = "inline-block";
     errorEl.textContent = msg;
   }}
-
   function clearError() {{
     errorEl.style.display = "none";
     errorEl.textContent = "";
@@ -340,12 +339,11 @@ agent_html = f"""
       await videoEl.play();
       unmuteEl.style.display = "none";
     }} catch (e) {{
-      // Browser blocked autoplay with sound
+      // Autoplay with sound blocked: keep muted, show button
       videoEl.muted = true;
       unmuteEl.style.display = "inline-block";
     }}
   }}
-
   unmuteEl.addEventListener("click", tryUnmute);
 
   speakEl.addEventListener("click", async () => {{
@@ -360,8 +358,10 @@ agent_html = f"""
     }}
     setStatus("speaking…");
     try {{
-      await agentManager.speak({{ type: "text", input: speakText }});
+      await agentManager.speak({{ type:"text", input:speakText }});
+      setStatus("connected");
     }} catch (e) {{
+      console.error("speak() error:", e);
       showError(e?.description || e?.message || "Speak failed");
       setStatus("error", false);
     }}
@@ -376,7 +376,6 @@ agent_html = f"""
     onVideoStateChange(state) {{
       console.log("onVideoStateChange:", state);
       if (state === "STOP") {{
-        // show idle when stream ends
         videoEl.srcObject = null;
         if (agentManager?.agent?.presenter?.idle_video) {{
           videoEl.src = agentManager.agent.presenter.idle_video;
@@ -388,22 +387,18 @@ agent_html = f"""
     }},
     onConnectionStateChange(state) {{
       console.log("onConnectionStateChange:", state);
-      setStatus(state);
       if (state === "connected") {{
         isConnected = true;
+        setStatus("connected");
         tryUnmute();
-        // auto-speak once if we have text
+        // Auto-speak once on connect if we have text
         if (speakText && !window.__didAutoSpeak) {{
           window.__didAutoSpeak = true;
-          agentManager.speak({{ type: "text", input: speakText }}).catch(e => {{
-            showError(e?.description || e?.message || "Speak failed");
-            setStatus("error", false);
-          }});
+          speakEl.click();
         }}
+      }} else {{
+        setStatus(state, state !== "error");
       }}
-    }},
-    onNewMessage(messages, type) {{
-      console.log("onNewMessage:", type, messages);
     }},
     onError(error, data) {{
       console.error("D-ID SDK Error:", error, data);
@@ -412,21 +407,29 @@ agent_html = f"""
     }},
   }};
 
-  const auth = {{ type: "key", clientKey: "{DID_CLIENT_KEY}" }};
-  const streamOptions = {{ compatibilityMode: "auto", streamWarmup: false }};
+  const auth = {{ type:"key", clientKey:"{DID_CLIENT_KEY}" }};
+  const streamOptions = {{ compatibilityMode:"auto", streamWarmup:false }};
 
-  (async () => {{
+  async function connectOnce() {{
+    clearError();
+    setStatus("connecting…");
     try {{
-      setStatus("connecting…");
-      agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
-      await agentManager.connect();
-      // note: speak() happens when we reach "connected" (see callback above)
+      if (!agentManager) {{
+        agentManager = await sdk.createAgentManager("{DID_AGENT_ID}", {{ auth, callbacks, streamOptions }});
+      }}
+      await agentManager.connect();   // If a session was stale, SDK will create a new one
     }} catch (e) {{
-      console.error("Failed to init agent:", e);
-      showError(e?.description || e?.message || "Init failed");
+      console.error("connect() error:", e);
+      showError(e?.description || e?.message || "Connect failed");
       setStatus("error", false);
     }}
-  }})();
+  }}
+
+  // Let the user explicitly start the connection and also retry on demand
+  connectEl.addEventListener("click", connectOnce);
+
+  // Optional: try once automatically on load, but the user can always retry
+  connectOnce();
 </script>
 """
 
