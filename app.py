@@ -243,38 +243,77 @@ def to_tts(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()  # collapse spaces
     return text
 
+# Clinical terms function
+def detect_clinical_terms(text: str) -> bool:
+    clinical_keywords = [
+        "attachment", "avoidant", "anxious", "disorganized",
+        "cortisol", "dopamine", "oxytocin", "secure base", "trauma", "hypervigilant"
+    ]
+    lowered = text.lower()
+    return any(term in lowered for term in clinical_keywords)
 
-# ------------------------------------------------------------------------------
-# Response formatting (your coaching voice)
-# ------------------------------------------------------------------------------
-def format_response(base_answer: str, query: str) -> str:
-    """Return a short, speakable coaching answer grounded in base_answer."""
+# ----------------------------------------------------------------------
+# Enhanced response formatting: coaching + fallback LLM synthesis
+# ----------------------------------------------------------------------
+def format_response(base_answer: str, query: str, use_clinical: bool = False) -> str:
+    fallback_trigger = "THIS IS QUESTION IS OUTSIDE OF MY TRAINING"
+    if fallback_trigger in base_answer:
+        # Fallback prompt when FAISS retrieval lacks coverage
+        prompt = f"""
+You are an expert workplace communication coach trained in psychology and management.
+The user is a busy middle manager asking about employee behavior and motivation.
+
+Your job is to infer the likely behavior pattern and offer practical guidance to help
+the manager motivate or support their employee more effectively. If you suspect an
+insecure attachment style (e.g., anxious, avoidant, disorganized), you may briefly
+mention that this is *common* and offer practical next steps.
+
+TONE: respectful, empathetic, professional.
+LENGTH: Max 200 words.
+FORMAT:
+- Start with a brief explanation of what might be happening.
+- Provide 3 example phrases the manager could say, each followed by a sentence on why it works.
+- Use plain speech unless clinical language is requested.
+
+QUESTION:
+{query}
+
+Response:
+"""
+        return llm.invoke(prompt).content.strip()
+
+    # Main coaching response prompt (FAISS context present)
+    clinical_note = """
+Use accurate psychological terms (e.g., 'disorganized attachment') and refer to hormonal
+factors when relevant (e.g., cortisol, oxytocin, etc.).
+""" if use_clinical else """
+Use practical, accessible language with no labels or jargon. Speak like a seasoned team leader.
+"""
+
     prompt = f"""
-You are a management communication coach. Answer the manager's question
-using ONLY the information in ANSWER. If the ANSWER lacks info, say so
-briefly and suggest consulting HR or an expert.
+You are a management communication coach. Your job is to guide a middle manager in handling
+the issue below. You will speak using ONLY the knowledge provided in ANSWER.
 
 AUDIENCE: busy middle manager with no psychology background.
-VOICE: calm, respectful, confident; like a soft-spoken, trusted field officer.
-STYLE: natural speech; short sentences; no jargon or labels.
+VOICE: calm, confident, supportive.
+STYLE: short sentences, no jargon unless asked for it.
 
-CONSTRAINTS (very important):
-- Max ~200 words total.
-- No markdown symbols (#, *, -, •, _, >, `).
-- No headings. No numbered or bulleted lists.
-- Include exactly 3 example phrases the manager could say. Format each as:
-  "Example phrase." Follow with a short why-it-works sentence that references attachment styles.
-- If information is insufficient, say: "I don't have enough to answer that
-  from this knowledge base." Then add one practical next step.
+{clinical_note}
 
-QUERY: {query}
+FORMAT:
+- Start with a short explanation of what might be happening.
+- Provide 3 example phrases the manager could say.
+    Each example should be followed by a "why this works" explanation that refers to attachment style behavior.
 
-ANSWER (retrieved context; do not add outside knowledge):
+QUESTION: {query}
+
+ANSWER (retrieved knowledge base):
 {base_answer}
 
-Now speak directly to the manager in one coherent, talk-ready response.
+Response:
 """
     return llm.invoke(prompt).content.strip()
+
 
 
 # ------------------------------------------------------------------------------
@@ -483,6 +522,9 @@ components.html(agent_html, height=560)
 # ------------------------------------------------------------------------------
 with st.form("query_form", clear_on_submit=True):
     query = st.text_input("Ask your question:", placeholder="Type your question and click 'Submit'")
+    clinical_mode_toggle = st.checkbox(
+        "Use clinical terms (e.g., for coaching psychologists or HR specialists)", value=False
+    )
     submitted = st.form_submit_button("Submit")
 
 if submitted:
@@ -490,7 +532,10 @@ if submitted:
     if cleaned_query:
         with st.spinner("Retrieving and formatting response..."):
             result = qa_chain({"query": cleaned_query})
-            formatted = format_response(result["result"], cleaned_query)
+            # NEW LOGIC
+            use_clinical = clinical_mode_toggle or detect_clinical_terms(cleaned_query)
+            print(f"Clinical mode: {use_clinical}")
+            formatted = format_response(result["result"], cleaned_query, use_clinical)
 
         st.session_state["latest_question"] = cleaned_query
         spoken = to_tts(formatted)  # sanitize the formatted text for TTS
