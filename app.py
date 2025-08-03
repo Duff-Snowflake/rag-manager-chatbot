@@ -30,6 +30,7 @@ for key, default in {
     "history": [],
     "latest_question": "",
     "speak_text": "",  # <- what the Agent will say on each render
+    "chat_history": [],  # <- stores prior questions and answers for follow-up
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -314,6 +315,23 @@ Response:
 """
     return llm.invoke(prompt).content.strip()
 
+# follow-up logic function
+
+def generate_followups(history: list, current_q: str, current_a: str) -> list:
+    """Return 2–3 follow-up coaching questions based on history and current Q/A."""
+    prompt = f"""
+You are a coaching assistant helping managers explore workplace communication styles.
+Given the user's latest question and your response, suggest 2–3 helpful follow-up questions.
+Avoid repeating the same idea. Make each follow-up different in tone or angle.
+
+User's question: {current_q}
+Assistant's answer: {current_a}
+
+Follow-up questions:
+- 
+"""
+    followup_response = llm.invoke(prompt).content.strip()
+    return [line.lstrip("- ").strip() for line in followup_response.splitlines() if line.startswith("- ")]
 
 
 # ------------------------------------------------------------------------------
@@ -532,18 +550,40 @@ if submitted:
     if cleaned_query:
         with st.spinner("Retrieving and formatting response..."):
             result = qa_chain({"query": cleaned_query})
+            
             # NEW LOGIC
             use_clinical = clinical_mode_toggle or detect_clinical_terms(cleaned_query)
             print(f"Clinical mode: {use_clinical}")
             formatted = format_response(result["result"], cleaned_query, use_clinical)
 
         st.session_state["latest_question"] = cleaned_query
-        spoken = to_tts(formatted)  # sanitize the formatted text for TTS
+        # Track this Q/A pair
+        st.session_state["chat_history"].append((cleaned_query, formatted))
+        if len(st.session_state["chat_history"]) > 10:
+            st.session_state["chat_history"] = st.session_state["chat_history"][-10:]  # prune
+
+        # Generate follow-ups
+        followups = generate_followups(st.session_state["chat_history"], cleaned_query, formatted)
+        st.session_state["followups"] = followups
+
+        # sanitize the formatted text for TTS
+        spoken = to_tts(formatted)  
         st.session_state["speak_text"] = spoken
         st.rerun()
     else:
         st.warning("Please enter a valid question.")
 
+# ------------------------------------------------------------------------------  
+# Follow-up Suggestions 
+# ------------------------------------------------------------------------------  
+if "followups" in st.session_state and st.session_state["followups"]:  
+    st.markdown("**Want to go deeper? Try one of these follow-up questions:**")  
+    cols = st.columns(len(st.session_state["followups"]))  
+    for i, followup in enumerate(st.session_state["followups"]):  
+        with cols[i]:  
+            if st.button(followup, key=f"followup_{i}"):  
+                st.session_state["latest_question"] = followup
+                
 # ------------------------------------------------------------------------------
 # Sample questions (optional)
 # ------------------------------------------------------------------------------
