@@ -7,7 +7,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
-import re   # <-- add at top with other imports
+import re   
+import random  
 
 from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
@@ -253,6 +254,22 @@ def detect_clinical_terms(text: str) -> bool:
     lowered = text.lower()
     return any(term in lowered for term in clinical_keywords)
 
+# ------------------------------------------------------------------------------
+# Add closing variations helper function
+# ------------------------------------------------------------------------------
+
+def closing_variation() -> str:
+    options = [
+        "Try these and let me know how it works out. We can dial this in over time.",
+        "Test these out and circle back. We’ll keep refining how you connect with this person.",
+        "Put a few of these into play and observe what shifts. We’ll tune it further as needed.",
+        "Use these as a starting point. I’m here to help you adjust as things evolve.",
+        "Give these a try and see what happens. We'll keep calibrating as you go.",
+        "Try them out and pay attention to what works. This is a process we can refine together.",
+        "Experiment with these and bring your results. We’ll adapt based on what you notice.",
+    ]
+    return random.choice(options)
+
 # ----------------------------------------------------------------------
 # Enhanced response formatting: coaching + fallback LLM synthesis
 # ----------------------------------------------------------------------
@@ -273,7 +290,7 @@ TONE: respectful, empathetic, professional.
 LENGTH: Max 200 words.
 FORMAT:
 - Start with a brief explanation of what might be happening.
-- Provide 3 example phrases the manager could say, each followed by a sentence on why it works.
+- Say: "Here are some example phrases." Then list 3 things the manager could say, each followed by a sentence on why it works.
 - Use plain speech unless clinical language is requested.
 
 QUESTION:
@@ -281,7 +298,8 @@ QUESTION:
 
 Response:
 """
-        return llm.invoke(prompt).content.strip()
+        response = llm.invoke(prompt).content.strip()
+        return f"{response} {closing_variation()}"
 
     # Main coaching response prompt (FAISS context present)
     clinical_note = """
@@ -303,7 +321,7 @@ STYLE: short sentences, no jargon unless asked for it.
 
 FORMAT:
 - Start with a short explanation of what might be happening.
-- Provide 3 example phrases the manager could say.
+- Say: "Here are some example phrases." Then list 3 things the manager could say.
     Each example should be followed by a "why this works" explanation that refers to attachment style behavior.
 
 QUESTION: {query}
@@ -313,7 +331,8 @@ ANSWER (retrieved knowledge base):
 
 Response:
 """
-    return llm.invoke(prompt).content.strip()
+    response = llm.invoke(prompt).content.strip()
+    return f"{response} {closing_variation()}"
 
 # follow-up logic function
 
