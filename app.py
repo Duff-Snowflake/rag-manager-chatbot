@@ -586,8 +586,14 @@ if submitted:
         followups = generate_followups(st.session_state["chat_history"], cleaned_query, formatted)
         st.session_state["followups"] = followups
 
-        # sanitize the formatted text for TTS
-        spoken = to_tts(formatted)  
+        # Ensure spoken text fits within D-ID's ~900 character limit
+        if len(formatted) > 900:
+            # Try to preserve only the core coaching section and intro to examples
+            intro = formatted.split("Here are some example phrases.")[0].strip()
+            spoken = to_tts(f"{intro} Here are some example phrases.")
+        else:
+            spoken = to_tts(formatted)
+ 
         st.session_state["speak_text"] = spoken
         st.rerun()
     else:
