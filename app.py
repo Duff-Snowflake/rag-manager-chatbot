@@ -522,6 +522,7 @@ agent_html = f"""
       }}
       await agentManager.speak({{ type: "text", input: text }});
       log("speak() finished");
+      await new Promise(resolve => setTimeout(resolve, 500));  // <- Add 500ms buffer
       updateAudioUI();
     }} catch (e) {{
       setError(e?.description || e); log("speak() error: " + JSON.stringify(e));
