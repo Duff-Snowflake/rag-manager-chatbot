@@ -586,14 +586,28 @@ if submitted:
         followups = generate_followups(st.session_state["chat_history"], cleaned_query, formatted)
         st.session_state["followups"] = followups
 
-        # Ensure spoken text fits within D-ID's ~900 character limit
-        if len(formatted) > 900:
-            # Try to preserve only the core coaching section and intro to examples
+        # ----------------------------
+        # NEW TTS LENGTH-BUFFERED LOGIC
+        # ----------------------------
+        MAX_TTS_LEN = 800
+        print(f"[TTS] Full formatted length: {len(formatted)}")
+
+        if len(formatted) > MAX_TTS_LEN:
             intro = formatted.split("Here are some example phrases.")[0].strip()
-            spoken = to_tts(f"{intro} Here are some example phrases.")
+            fallback = f"{intro} Here are some example phrases."
+            spoken = fallback[:MAX_TTS_LEN]
+            print(f"[TTS] Using fallback intro only, length: {len(spoken)}")
         else:
-            spoken = to_tts(formatted)
- 
+            spoken = formatted[:MAX_TTS_LEN]
+            print(f"[TTS] Using full response, length: {len(spoken)}")
+
+        if not spoken.strip().endswith(('.', '!', '?', '…')):
+            spoken += "."
+
+        with open("debug_tts.txt", "w", encoding="utf-8") as f:
+            f.write(spoken)
+
+        spoken = to_tts(spoken)
         st.session_state["speak_text"] = spoken
         st.rerun()
     else:
