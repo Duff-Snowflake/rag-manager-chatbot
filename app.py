@@ -21,7 +21,7 @@ from rag_pipeline import load_faiss_index
 # ------------------------------------------------------------------------------
 st.set_page_config(page_title="Employee Management Assistant", layout="centered")
 # Shared content width for desktop/tablet
-CONTENT_WIDTH = 720      # matches form container width
+CONTENT_WIDTH = 768      # matches form container width
 VIDEO_AR = 16 / 9
 VIDEO_HEIGHT = int(CONTENT_WIDTH / VIDEO_AR)  # ~405
 
@@ -66,11 +66,9 @@ llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 # ------------------------------------------------------------------------------
 st.markdown(f"""
 <style>
-  :root {{
-    --content-width: {CONTENT_WIDTH}px;
-  }}
+  :root {{ --content-width: {CONTENT_WIDTH}px; }}
 
-  /* Keep container width same for form and video on desktop */
+  /* Make the page container the same width as the form/video on desktop */
   [data-testid="stAppViewContainer"] .main .block-container {{
     max-width: var(--content-width) !important;
     margin: 0 auto !important;
@@ -78,29 +76,24 @@ st.markdown(f"""
     padding-right: 1rem !important;
   }}
 
-  /* Force all custom component iframes to fill container */
-  [data-testid="stIFrame"] > iframe {{
+  /* Make *all* custom component iframes fill the container width.
+     Cover multiple DOM patterns Streamlit uses across versions. */
+  [data-testid="stIFrame"] > iframe,
+  [data-testid="stIFrame"] iframe,
+  iframe[data-testid="stIFrame"],
+  iframe[title^="st.iframe"] {{
     width: 100% !important;
     max-width: 100% !important;
     display: block !important;
   }}
 
-  /* Mobile: full-bleed */
+  /* Mobile: go full width */
   @media (max-width: 768px) {{
     [data-testid="stAppViewContainer"] .main .block-container {{
       max-width: 100% !important;
       padding-left: 0 !important;
       padding-right: 0 !important;
     }}
-  }}
-
-  /* Inside the iframe, make the video responsive */
-  #agent-video {{
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #000;
-    border-radius: 12px;
-    object-fit: contain;
   }}
 </style>
 """, unsafe_allow_html=True)
@@ -487,11 +480,13 @@ agent_html = f"""
 </script>
 """
 
-
 # Render the agent video block (single window at the top)
-# components.html(agent_html, height=560)
-components.html(agent_html, height=VIDEO_HEIGHT + 100, scrolling=False)
-
+components.html(
+    agent_html,
+    height=VIDEO_HEIGHT + 100,   # room for status/controls
+    width=CONTENT_WIDTH,         # <-- forces iframe width to match the form
+    scrolling=False
+)
 
 # ------------------------------------------------------------------------------
 # Query input
