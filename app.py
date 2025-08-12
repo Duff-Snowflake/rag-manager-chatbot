@@ -104,6 +104,27 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
     cursor: pointer;
     user-select: none;
 }
+:root { --content-width: 720px; }
+
+/* Desktop/tablet: keep everything the same width as the input */
+@media (min-width: 769px) {
+  .block-container {
+    max-width: var(--content-width) !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    margin: 0 auto !important;
+  }
+}
+
+/* Mobile: allow full width */
+@media (max-width: 768px) {
+  .block-container {
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
 </style>
 <div class="top-banner">
   <div style="display: flex; align-items: center;">
@@ -372,17 +393,19 @@ agent_html = f"""
     width:100%; max-width:1024px; aspect-ratio:16/9; background:#000;
     border-radius:12px; object-fit:contain; opacity:0; animation:fadeIn .6s ease forwards;
   }}
-
 /* Mobile scaling for full width */
-  @media (max-width: 768px) {{
-    #agent-video {{
-      max-width: 100% !important;
-      height: auto !important;
-    }}
+    @media (max-width: 768px) {{
     .video-wrapper {{
-      padding: 0 !important;
+        width: 100%;
+        padding: 0 !important;   /* no inner padding so the video can go edge-to-edge */
+    }}
+    #agent-video {{
+        max-width: 100% !important;
+        height: auto !important;
     }}
 }}
+
+
   @keyframes fadeIn {{ to {{ opacity:1; }} }}
   .row {{ display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; justify-content:center; }}
   .chip {{
@@ -392,7 +415,6 @@ agent_html = f"""
   .slider-wrap {{ display:flex; align-items:center; gap:.5rem; }}
   .hidden {{ display:none; }}
 </style>
-
 <div class="video-wrapper">
   <video id="agent-video" muted autoplay playsinline></video>
 
