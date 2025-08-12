@@ -20,6 +20,10 @@ from rag_pipeline import load_faiss_index
 # Page config
 # ------------------------------------------------------------------------------
 st.set_page_config(page_title="Employee Management Assistant", layout="centered")
+# Keep the app’s content width consistent between the video and form
+CONTENT_WIDTH = 720           # desktop/tablet width for both video + form
+VIDEO_AR = 16 / 9
+VIDEO_HEIGHT = int(CONTENT_WIDTH / VIDEO_AR)  # ~405
 
 # ------------------------------------------------------------------------------
 # Session state init (BEFORE any access)
@@ -60,64 +64,49 @@ llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 # ------------------------------------------------------------------------------
 # Global CSS
 # ------------------------------------------------------------------------------
-st.markdown("""
-<style>  
-body { background-color: #343541; color: white; margin-top: 80px; font-size: 18px; }
-.top-banner {
-    position: fixed; top: 0; left: 0; width: 100%;
-    background-color: #202123; color: white;
-    padding: 0.75rem 1rem; z-index: 9999; display: flex;
-    align-items: center; justify-content: space-between;
-    border-bottom: 1px solid #3f4147;
-}
-.top-banner img { height: 30px; margin-right: 10px; }
-.top-banner .status { font-size: 0.85rem; color: #b3b3b3; }
+st.markdown(f"""
+<style>
+  :root {{
+    --content-width: {CONTENT_WIDTH}px;
+  }}
 
-@keyframes fadeIn { to { opacity: 1; } }
-.unmute-tip {
-    text-align: right;
-    width: 100%;
-    max-width: 640px;
-    margin: .25rem auto 0;
-}
-.unmute-btn {
-    display: inline-block;
-    font-size: 12px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #2b2d31;
-    color: #ddd;
-    border: 1px solid #3f4147;
-    cursor: pointer;
-    user-select: none;
-}
-:root { --content-width: 720px; }
-            
-/* Make any Streamlit component iframe stretch to the container width */
-[data-testid="stAppViewContainer"] .main .block-container iframe[title="st.iframe"] {
-  width: 100% !important;
-  max-width: 100% !important;
-  display: block;
-}
+  body {{ background-color: #343541; color: white; margin-top: 80px; font-size: 18px; }}
 
-/* Desktop/tablet: keep everything the same width as the input */
-[data-testid="stAppViewContainer"] .main .block-container,
-.stApp [data-testid="block-container"] {
-  max-width: var(--content-width) !important;
-  padding-left: 1rem !important;
-  padding-right: 1rem !important;
-  margin: 0 auto !important;
-}
+  .top-banner {{
+      position: fixed; top: 0; left: 0; width: 100%;
+      background-color: #202123; color: white;
+      padding: 0.75rem 1rem; z-index: 9999; display: flex;
+      align-items: center; justify-content: space-between;
+      border-bottom: 1px solid #3f4147;
+  }}
+  .top-banner img {{ height: 30px; margin-right: 10px; }}
+  .top-banner .status {{ font-size: 0.85rem; color: #b3b3b3; }}
 
-/* Mobile: allow full width edge-to-edge */
-@media (max-width: 768px) {
+  /* Desktop/tablet: keep everything the same width as the input */
   [data-testid="stAppViewContainer"] .main .block-container,
-  .stApp [data-testid="block-container"] {
+  .stApp [data-testid="block-container"] {{
+    max-width: var(--content-width) !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    margin: 0 auto !important;
+  }}
+
+  /* Make any Streamlit *component* iframe (including components.html) fill container width */
+  [data-testid="stIFrame"] > iframe {{
+    width: 100% !important;
     max-width: 100% !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-}
+    display: block !important;
+  }}
+
+  /* Mobile: allow full width edge-to-edge */
+  @media (max-width: 768px) {{
+    [data-testid="stAppViewContainer"] .main .block-container,
+    .stApp [data-testid="block-container"] {{
+      max-width: 100% !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }}
+  }}
 </style>
 
 <div class="top-banner">
@@ -125,19 +114,19 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
     <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo">
     <strong>Employee Management Assistant</strong>
   </div>
-  <div class="status">Logged in as: {email}</div>
+  <div class="status">Logged in as: {st.session_state.get("email","")}</div>
 </div>
-""".replace("{email}", st.session_state.get("email","")), unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* Make iframe (HTML component) match container width */
-[data-testid="stAppViewContainer"] .main .block-container iframe {
-    width: 100% !important;
-    max-width: 100% !important;
-}
-</style>
 """, unsafe_allow_html=True)
+
+# st.markdown("""
+# <style>
+# /* Make iframe (HTML component) match container width */
+# [data-testid="stAppViewContainer"] .main .block-container iframe {
+#   width: 100% !important;
+#     max-width: 100% !important;
+# }
+# </style>
+# """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
 # Authentication & trial access
@@ -389,37 +378,26 @@ escaped_text = json_dumps(speak_text)  # safe JSON for JS
 
 agent_html = f"""
 <style>
-  html, body {{ margin:0; padding:0; width:100%; }}
-
   .video-wrapper {{
     display:flex; flex-direction:column; align-items:center; gap:.5rem; padding:1rem 0;
     width: 100%;
   }}
-
-  /* make the video fill whatever width the iframe has */
+  /* Fill the iframe width and keep aspect ratio */
   #agent-video {{
     width: 100%;
-    max-width: none;              /* remove cap */
-    aspect-ratio: 16 / 9;         /* keep proportional */
+    aspect-ratio: 16 / 9;
     background:#000;
     border-radius:12px;
     object-fit: contain;
     opacity:0; animation:fadeIn .6s ease forwards;
   }}
-
-  @media (max-width: 768px) {{
-    .video-wrapper {{ padding: 0 !important; }}
-  }}
-
   @keyframes fadeIn {{ to {{ opacity:1; }} }}
-
   .row {{ display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; justify-content:center; }}
   .chip {{
     font-size:12px; padding:.25rem .6rem; border-radius:999px; border:1px solid #3f4147;
     background:#2b2d31; color:#ddd;
   }}
   .slider-wrap {{ display:flex; align-items:center; gap:.5rem; }}
-  .hidden {{ display:none; }}
 </style>
 
 <div class="video-wrapper">
@@ -534,7 +512,9 @@ agent_html = f"""
 
 
 # Render the agent video block (single window at the top)
-components.html(agent_html, height=560)
+# components.html(agent_html, height=560)
+components.html(agent_html, height=VIDEO_HEIGHT + 100, scrolling=False)
+
 
 # ------------------------------------------------------------------------------
 # Query input
