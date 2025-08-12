@@ -20,8 +20,8 @@ from rag_pipeline import load_faiss_index
 # Page config
 # ------------------------------------------------------------------------------
 st.set_page_config(page_title="Employee Management Assistant", layout="centered")
-# Keep the app’s content width consistent between the video and form
-CONTENT_WIDTH = 720           # desktop/tablet width for both video + form
+# Shared content width for desktop/tablet
+CONTENT_WIDTH = 720      # matches form container width
 VIDEO_AR = 16 / 9
 VIDEO_HEIGHT = int(CONTENT_WIDTH / VIDEO_AR)  # ~405
 
@@ -70,63 +70,40 @@ st.markdown(f"""
     --content-width: {CONTENT_WIDTH}px;
   }}
 
-  body {{ background-color: #343541; color: white; margin-top: 80px; font-size: 18px; }}
-
-  .top-banner {{
-      position: fixed; top: 0; left: 0; width: 100%;
-      background-color: #202123; color: white;
-      padding: 0.75rem 1rem; z-index: 9999; display: flex;
-      align-items: center; justify-content: space-between;
-      border-bottom: 1px solid #3f4147;
-  }}
-  .top-banner img {{ height: 30px; margin-right: 10px; }}
-  .top-banner .status {{ font-size: 0.85rem; color: #b3b3b3; }}
-
-  /* Desktop/tablet: keep everything the same width as the input */
-  [data-testid="stAppViewContainer"] .main .block-container,
-  .stApp [data-testid="block-container"] {{
+  /* Keep container width same for form and video on desktop */
+  [data-testid="stAppViewContainer"] .main .block-container {{
     max-width: var(--content-width) !important;
+    margin: 0 auto !important;
     padding-left: 1rem !important;
     padding-right: 1rem !important;
-    margin: 0 auto !important;
   }}
 
-  /* Make any Streamlit *component* iframe (including components.html) fill container width */
+  /* Force all custom component iframes to fill container */
   [data-testid="stIFrame"] > iframe {{
     width: 100% !important;
     max-width: 100% !important;
     display: block !important;
   }}
 
-  /* Mobile: allow full width edge-to-edge */
+  /* Mobile: full-bleed */
   @media (max-width: 768px) {{
-    [data-testid="stAppViewContainer"] .main .block-container,
-    .stApp [data-testid="block-container"] {{
+    [data-testid="stAppViewContainer"] .main .block-container {{
       max-width: 100% !important;
       padding-left: 0 !important;
       padding-right: 0 !important;
     }}
   }}
+
+  /* Inside the iframe, make the video responsive */
+  #agent-video {{
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 12px;
+    object-fit: contain;
+  }}
 </style>
-
-<div class="top-banner">
-  <div style="display: flex; align-items: center;">
-    <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo">
-    <strong>Employee Management Assistant</strong>
-  </div>
-  <div class="status">Logged in as: {st.session_state.get("email","")}</div>
-</div>
 """, unsafe_allow_html=True)
-
-# st.markdown("""
-# <style>
-# /* Make iframe (HTML component) match container width */
-# [data-testid="stAppViewContainer"] .main .block-container iframe {
-#   width: 100% !important;
-#     max-width: 100% !important;
-# }
-# </style>
-# """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
 # Authentication & trial access
