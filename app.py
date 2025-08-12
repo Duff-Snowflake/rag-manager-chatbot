@@ -443,7 +443,7 @@ agent_html = f"""
           videoEl.volume = parseFloat(volEl.value || "0.8");
           // start muted to satisfy autoplay policies
           videoEl.muted = true;
-          videoEl.play().catch(()=>{});
+          videoEl.play().catch(()=>{{}});
           updateAudioUI();
           return value;
         }},
@@ -470,7 +470,7 @@ agent_html = f"""
       if (srcObjectRef) {{
         videoEl.src = "";
         videoEl.srcObject = srcObjectRef;
-        videoEl.play().catch(()=>{});
+        videoEl.play().catch(()=>{{}});
       }}
       await agentManager.speak({{ type: "text", input: text.slice(0, 900) }});
     }} catch (e) {{
