@@ -73,19 +73,6 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
 .top-banner img { height: 30px; margin-right: 10px; }
 .top-banner .status { font-size: 0.85rem; color: #b3b3b3; }
 
-.video-wrapper {
-    display: flex; flex-direction: column; align-items: center; padding: 1rem 0;
-}
-#agent-video {
-    width: 100%;
-    max-width: 640px;      /* larger player */
-    height: auto;
-    min-height: 360px;     /* reserve space so it never collapses */
-    object-fit: contain;   /* avoid cropping */
-    border-radius: 12px;
-    background: #000;
-    opacity: 0; animation: fadeIn 0.6s ease-in-out forwards;
-}
 @keyframes fadeIn { to { opacity: 1; } }
 .unmute-tip {
     text-align: right;
@@ -107,25 +94,25 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
 :root { --content-width: 720px; }
 
 /* Desktop/tablet: keep everything the same width as the input */
-@media (min-width: 769px) {
-  .block-container {
-    max-width: var(--content-width) !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-    margin: 0 auto !important;
-  }
+[data-testid="stAppViewContainer"] .main .block-container,
+.stApp [data-testid="block-container"] {
+  max-width: var(--content-width) !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  margin: 0 auto !important;
 }
 
-/* Mobile: allow full width */
+/* Mobile: allow full width edge-to-edge */
 @media (max-width: 768px) {
-  .block-container {
+  [data-testid="stAppViewContainer"] .main .block-container,
+  .stApp [data-testid="block-container"] {
     max-width: 100% !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
 }
-
 </style>
+
 <div class="top-banner">
   <div style="display: flex; align-items: center;">
     <img src="https://raw.githubusercontent.com/Duff-Snowflake/rag-manager-chatbot/main/assets/Your_logo_here001.png" alt="Logo">
@@ -390,7 +377,7 @@ agent_html = f"""
     width: 100%;
   }}
   #agent-video {{
-    width:100%; max-width:1024px; aspect-ratio:16/9; background:#000;
+    width:100%; max-width:100%; aspect-ratio:16/9; background:#000;
     border-radius:12px; object-fit:contain; opacity:0; animation:fadeIn .6s ease forwards;
   }}
 /* Mobile scaling for full width */
