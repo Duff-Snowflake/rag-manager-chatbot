@@ -92,6 +92,13 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
     user-select: none;
 }
 :root { --content-width: 720px; }
+            
+/* Make any Streamlit component iframe stretch to the container width */
+[data-testid="stAppViewContainer"] .main .block-container iframe[title="st.iframe"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: block;
+}
 
 /* Desktop/tablet: keep everything the same width as the input */
 [data-testid="stAppViewContainer"] .main .block-container,
