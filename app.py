@@ -61,7 +61,7 @@ llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, temperature=0)
 # Global CSS
 # ------------------------------------------------------------------------------
 st.markdown("""
-<style>
+<style>  
 body { background-color: #343541; color: white; margin-top: 80px; font-size: 18px; }
 .top-banner {
     position: fixed; top: 0; left: 0; width: 100%;
@@ -128,6 +128,16 @@ body { background-color: #343541; color: white; margin-top: 80px; font-size: 18p
   <div class="status">Logged in as: {email}</div>
 </div>
 """.replace("{email}", st.session_state.get("email","")), unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* Make iframe (HTML component) match container width */
+[data-testid="stAppViewContainer"] .main .block-container iframe {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
 # Authentication & trial access
@@ -379,28 +389,30 @@ escaped_text = json_dumps(speak_text)  # safe JSON for JS
 
 agent_html = f"""
 <style>
+  html, body {{ margin:0; padding:0; width:100%; }}
+
   .video-wrapper {{
     display:flex; flex-direction:column; align-items:center; gap:.5rem; padding:1rem 0;
     width: 100%;
   }}
-  #agent-video {{
-    width:100%; max-width:100%; aspect-ratio:16/9; background:#000;
-    border-radius:12px; object-fit:contain; opacity:0; animation:fadeIn .6s ease forwards;
-  }}
-/* Mobile scaling for full width */
-    @media (max-width: 768px) {{
-    .video-wrapper {{
-        width: 100%;
-        padding: 0 !important;   /* no inner padding so the video can go edge-to-edge */
-    }}
-    #agent-video {{
-        max-width: 100% !important;
-        height: auto !important;
-    }}
-}}
 
+  /* make the video fill whatever width the iframe has */
+  #agent-video {{
+    width: 100%;
+    max-width: none;              /* remove cap */
+    aspect-ratio: 16 / 9;         /* keep proportional */
+    background:#000;
+    border-radius:12px;
+    object-fit: contain;
+    opacity:0; animation:fadeIn .6s ease forwards;
+  }}
+
+  @media (max-width: 768px) {{
+    .video-wrapper {{ padding: 0 !important; }}
+  }}
 
   @keyframes fadeIn {{ to {{ opacity:1; }} }}
+
   .row {{ display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; justify-content:center; }}
   .chip {{
     font-size:12px; padding:.25rem .6rem; border-radius:999px; border:1px solid #3f4147;
@@ -409,6 +421,7 @@ agent_html = f"""
   .slider-wrap {{ display:flex; align-items:center; gap:.5rem; }}
   .hidden {{ display:none; }}
 </style>
+
 <div class="video-wrapper">
   <video id="agent-video" muted autoplay playsinline></video>
 
@@ -432,7 +445,7 @@ agent_html = f"""
   const mutedEl   = document.getElementById("muted");
   const unmuteEl  = document.getElementById("unmute-btn");
 
-  const speakText = {escaped_text if 'escaped_text' in globals() else '" " '};  // uses the Python var you set above
+  const speakText = {{escaped_text if 'escaped_text' in globals() else '" "'}};
 
   let srcObjectRef = null;
   let agentManager = null;
@@ -457,8 +470,7 @@ agent_html = f"""
           srcObjectRef = value;
           videoEl.srcObject = value;
           videoEl.volume = parseFloat(volEl.value || "0.8");
-          // start muted to satisfy autoplay policies
-          videoEl.muted = true;
+          videoEl.muted = true;      // start muted to satisfy autoplay
           videoEl.play().catch(()=>{{}});
           updateAudioUI();
           return value;
@@ -499,24 +511,18 @@ agent_html = f"""
       videoEl.muted = false;
       await videoEl.play();
     }} catch (e) {{
-      // If blocked by browser policy, stay muted until user clicks again.
-      videoEl.muted = true;
+      videoEl.muted = true; // still blocked
     }}
     updateAudioUI();
   }}
 
-  // UI hooks
   unmuteEl.onclick = tryUnmute;
   videoEl.addEventListener("click", tryUnmute, {{ once: false }});
-  volEl.oninput = () => {{
-    videoEl.volume = parseFloat(volEl.value || "0.8");
-  }};
+  volEl.oninput = () => {{ videoEl.volume = parseFloat(volEl.value || "0.8"); }};
 
-  // boot
   (async () => {{
     try {{
       await ensureConnected();
-      // attempt to unmute right after a programmatic connect (may be blocked)
       await tryUnmute();
     }} catch (e) {{
       console.error("init error:", e);
@@ -525,6 +531,7 @@ agent_html = f"""
   }})();
 </script>
 """
+
 
 # Render the agent video block (single window at the top)
 components.html(agent_html, height=560)
