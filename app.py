@@ -544,13 +544,6 @@ if submitted:
             st.session_state["chat_history"].append((cleaned_query, spoken))
             if len(st.session_state["chat_history"]) > 10:
                 st.session_state["chat_history"] = st.session_state["chat_history"][-10:]
-
-            # OPTIONAL: regenerate follow-ups if you still use them elsewhere
-            # st.session_state["followups"] = generate_followups(st.session_state["chat_history"], cleaned_query, spoken)
-        else:
-            # OPTIONAL: clear followups if no answer
-            # st.session_state["followups"] = []
-
         st.rerun()
     else:
         st.warning("Please enter a valid question.")
