@@ -24,6 +24,8 @@ st.set_page_config(page_title="Employee Management Assistant", layout="centered"
 CONTENT_WIDTH = 768      # matches form container width
 VIDEO_AR = 16 / 9
 VIDEO_HEIGHT = int(CONTENT_WIDTH / VIDEO_AR)  # ~405
+CONTROL_ROW_PX = 64          # height of the status/volume row
+COMPONENT_VPAD_PX = 16       # a little breathing room below the controls
 
 # ------------------------------------------------------------------------------
 # Session state init (BEFORE any access)
@@ -346,14 +348,14 @@ from json import dumps as json_dumps
 speak_text = st.session_state.get("speak_text", "")
 escaped_text = json_dumps(speak_text)  # safe JSON for JS
 
-# Add this line right before you build agent_html (forces iframe refresh when speak_text changes)
+# Force a fresh iframe whenever the speak_text changes
 nonce = abs(hash(st.session_state.get("speak_text", ""))) % 1_000_000
 
 agent_html = f"""
 <div data-nonce="{nonce}" style="display:none;"></div>
 
 <style>
-  /* Make the iframe document and wrapper fill the full height we pass from Streamlit */
+  /* Make the iframe document and wrapper fill the height we pass from Streamlit */
   html, body {{
     height: 100%;
     margin: 0;
@@ -363,37 +365,37 @@ agent_html = f"""
   .video-wrapper {{
     display: flex;
     flex-direction: column;
-    align-items: center;      /* horizontal center */
-    justify-content: center;  /* vertical center if height allows */
-    gap: .5rem;
+    align-items: center;         /* center horizontally */
+    justify-content: flex-start; /* video sits at the top, controls just under */
     width: 100%;
-    height: 100%;             /* fill iframe height */
-    padding: 0;               /* no extra vertical padding so video gets full space */
+    height: 100%;                /* fill iframe height */
+    padding: 0;
     box-sizing: border-box;
+    gap: .5rem;
   }}
 
-  /* Visible, guaranteed height for the video area, with room for the controls row */
+  /* Video gets all remaining height; controls get {CONTROL_ROW_PX}px */
   #agent-video {{
-  display: block;
-  margin: 0 auto;   /* force horizontal center */
-  width: auto;      /* allow scaling within height */
-  max-width: 100%;
-  height: calc(100% - 56px);
-  max-height: 100%;
-  background: #000;
-  border-radius: 12px;
-  object-fit: contain;
-  opacity: 0;
-  animation: fadeIn .6s ease forwards;
-}}
+    display: block;
+    margin: 0 auto;              /* center video */
+    width: 100%;
+    max-width: 100%;
+    height: calc(100% - {CONTROL_ROW_PX}px);  /* <-- keeps room for controls */
+    max-height: 100%;
+    background: #000;
+    border-radius: 12px;
+    object-fit: contain;         /* letterbox, no cropping */
+    opacity: 0;
+    animation: fadeIn .6s ease forwards;
+  }}
 
   .row {{
     display: flex;
     gap: .75rem;
     align-items: center;
-    flex-wrap: wrap;
     justify-content: center;
-    height: 56px;               /* keep in sync with calc() above */
+    flex-wrap: wrap;
+    height: {CONTROL_ROW_PX}px;  /* <-- matches calc() above */
   }}
 
   .chip {{
@@ -464,9 +466,7 @@ agent_html = f"""
           videoEl.srcObject = value;
           videoEl.volume = parseFloat(volEl.value || "0.8");
           videoEl.muted = true;      // start muted to satisfy autoplay
-          videoEl.play().catch(()=>{{
-            /* ignore */
-          }});
+          videoEl.play().catch(()=>{{}});
           updateAudioUI();
           return value;
         }},
@@ -493,7 +493,7 @@ agent_html = f"""
       if (srcObjectRef) {{
         videoEl.src = "";
         videoEl.srcObject = srcObjectRef;
-        videoEl.play().catch(()=>{{ /* ignore */ }});
+        videoEl.play().catch(()=>{{}});
       }}
       await agentManager.speak({{ type: "text", input: text.slice(0, 900) }});
     }} catch (e) {{
@@ -531,11 +531,12 @@ agent_html = f"""
   }})();
 </script>
 """
+
 html_key = f"did_agent_{hash(st.session_state.get('speak_text', '')) % 1_000_000}"
 
 components.html(
     agent_html,
-    height=VIDEO_HEIGHT + 100,
+    height=VIDEO_HEIGHT + CONTROL_ROW_PX + COMPONENT_VPAD_PX,
     scrolling=False
 )
 
