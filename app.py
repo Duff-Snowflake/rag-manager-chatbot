@@ -480,12 +480,14 @@ agent_html = f"""
 </script>
 """
 
-# Render the agent video block (single window at the top)
+html_key = f"did_agent_{hash(st.session_state.get('speak_text', '')) % 1_000_000}"
+
 components.html(
     agent_html,
-    height=VIDEO_HEIGHT + 100,   # room for status/controls
-    width=CONTENT_WIDTH,         # <-- forces iframe width to match the form
-    scrolling=False
+    height=VIDEO_HEIGHT + 100,
+    width=CONTENT_WIDTH,
+    scrolling=False,
+    key=html_key   # <— important so new speakText is picked up
 )
 
 # ------------------------------------------------------------------------------
@@ -502,46 +504,53 @@ if submitted:
     cleaned_query = query.strip()
     if cleaned_query:
         with st.spinner("Retrieving and formatting response..."):
-            result = qa_chain({"query": cleaned_query})
-            
-            # NEW LOGIC
-            use_clinical = clinical_mode_toggle or detect_clinical_terms(cleaned_query)
-            print(f"Clinical mode: {use_clinical}")
-            formatted = format_response(result["result"], cleaned_query, use_clinical)
+            try:
+                result = qa_chain({"query": cleaned_query})
+                base = (result.get("result") or result.get("answer") or "").strip()
+            except Exception:
+                st.error("Sorry, I hit an error fetching an answer. Playing a brief explanation instead.")
+                base = ""
 
-        st.session_state["latest_question"] = cleaned_query
-        # Track this Q/A pair
-        st.session_state["chat_history"].append((cleaned_query, formatted))
-        if len(st.session_state["chat_history"]) > 10:
-            st.session_state["chat_history"] = st.session_state["chat_history"][-10:]  # prune
+            # If we didn't get anything from RAG, speak a short default line so the avatar plays
+            if not base:
+                spoken = "I’m here and ready. Please click Unmute if you can’t hear me."
+            else:
+                use_clinical = clinical_mode_toggle or detect_clinical_terms(cleaned_query)
+                formatted = format_response(base, cleaned_query, use_clinical)
 
-        # Generate follow-ups
-        followups = generate_followups(st.session_state["chat_history"], cleaned_query, formatted)
-        st.session_state["followups"] = followups
+                # --- TTS LENGTH-BUFFERED LOGIC ---
+                MAX_TTS_LEN = 800
+                if len(formatted) > MAX_TTS_LEN:
+                    intro = formatted.split("Here are some example phrases.")[0].strip()
+                    fallback = f"{intro} Here are some example phrases."
+                    spoken = fallback[:MAX_TTS_LEN]
+                else:
+                    spoken = formatted[:MAX_TTS_LEN]
 
-        # ----------------------------
-        # NEW TTS LENGTH-BUFFERED LOGIC
-        # ----------------------------
-        MAX_TTS_LEN = 800
-        print(f"[TTS] Full formatted length: {len(formatted)}")
+            # Ensure punctuation for better prosody
+            if not spoken.strip().endswith(('.', '!', '?', '…')):
+                spoken += "."
 
-        if len(formatted) > MAX_TTS_LEN:
-            intro = formatted.split("Here are some example phrases.")[0].strip()
-            fallback = f"{intro} Here are some example phrases."
-            spoken = fallback[:MAX_TTS_LEN]
-            print(f"[TTS] Using fallback intro only, length: {len(spoken)}")
+            # (Optional) write out for debugging
+            with open("debug_tts.txt", "w", encoding="utf-8") as f:
+                f.write(spoken)
+
+            spoken = to_tts(spoken)
+            st.session_state["speak_text"] = spoken
+
+        # Keep history only when we had a real base answer (optional)
+        if base:
+            st.session_state["latest_question"] = cleaned_query
+            st.session_state["chat_history"].append((cleaned_query, spoken))
+            if len(st.session_state["chat_history"]) > 10:
+                st.session_state["chat_history"] = st.session_state["chat_history"][-10:]
+
+            # OPTIONAL: regenerate follow-ups if you still use them elsewhere
+            # st.session_state["followups"] = generate_followups(st.session_state["chat_history"], cleaned_query, spoken)
         else:
-            spoken = formatted[:MAX_TTS_LEN]
-            print(f"[TTS] Using full response, length: {len(spoken)}")
+            # OPTIONAL: clear followups if no answer
+            # st.session_state["followups"] = []
 
-        if not spoken.strip().endswith(('.', '!', '?', '…')):
-            spoken += "."
-
-        with open("debug_tts.txt", "w", encoding="utf-8") as f:
-            f.write(spoken)
-
-        spoken = to_tts(spoken)
-        st.session_state["speak_text"] = spoken
         st.rerun()
     else:
         st.warning("Please enter a valid question.")
