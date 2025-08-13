@@ -363,25 +363,29 @@ agent_html = f"""
   .video-wrapper {{
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: center;      /* horizontal center */
+    justify-content: center;  /* vertical center if height allows */
     gap: .5rem;
     width: 100%;
-    height: 100%;            /* fill iframe height */
-    padding: 0;              /* no extra vertical padding so video gets full space */
+    height: 100%;             /* fill iframe height */
+    padding: 0;               /* no extra vertical padding so video gets full space */
     box-sizing: border-box;
   }}
 
   /* Visible, guaranteed height for the video area, with room for the controls row */
   #agent-video {{
-    width: 100%;
-    height: calc(100% - 56px);   /* reserve space for status/volume controls */
-    max-height: 100%;
-    background: #000;
-    border-radius: 12px;
-    object-fit: contain;         /* letterbox, no cropping */
-    opacity: 0;
-    animation: fadeIn .6s ease forwards;
-  }}
+  display: block;
+  margin: 0 auto;   /* force horizontal center */
+  width: auto;      /* allow scaling within height */
+  max-width: 100%;
+  height: calc(100% - 56px);
+  max-height: 100%;
+  background: #000;
+  border-radius: 12px;
+  object-fit: contain;
+  opacity: 0;
+  animation: fadeIn .6s ease forwards;
+}}
 
   .row {{
     display: flex;
