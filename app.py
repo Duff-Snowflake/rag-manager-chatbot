@@ -346,28 +346,68 @@ from json import dumps as json_dumps
 speak_text = st.session_state.get("speak_text", "")
 escaped_text = json_dumps(speak_text)  # safe JSON for JS
 
+# Add this line right before you build agent_html (forces iframe refresh when speak_text changes)
+nonce = abs(hash(st.session_state.get("speak_text", ""))) % 1_000_000
+
 agent_html = f"""
+<div data-nonce="{nonce}" style="display:none;"></div>
+
 <style>
-  .video-wrapper {{
-    display:flex; flex-direction:column; align-items:center; gap:.5rem; padding:1rem 0;
-    width: 100%;
+  /* Make the iframe document and wrapper fill the full height we pass from Streamlit */
+  html, body {{
+    height: 100%;
+    margin: 0;
+    padding: 0;
   }}
-  /* Fill the iframe width and keep aspect ratio */
+
+  .video-wrapper {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+    height: 100%;            /* fill iframe height */
+    padding: 0;              /* no extra vertical padding so video gets full space */
+    box-sizing: border-box;
+  }}
+
+  /* Visible, guaranteed height for the video area, with room for the controls row */
   #agent-video {{
     width: 100%;
-    aspect-ratio: 16 / 9;
-    background:#000;
-    border-radius:12px;
-    object-fit: contain;
-    opacity:0; animation:fadeIn .6s ease forwards;
+    height: calc(100% - 56px);   /* reserve space for status/volume controls */
+    max-height: 100%;
+    background: #000;
+    border-radius: 12px;
+    object-fit: contain;         /* letterbox, no cropping */
+    opacity: 0;
+    animation: fadeIn .6s ease forwards;
   }}
-  @keyframes fadeIn {{ to {{ opacity:1; }} }}
-  .row {{ display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; justify-content:center; }}
+
+  .row {{
+    display: flex;
+    gap: .75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    height: 56px;               /* keep in sync with calc() above */
+  }}
+
   .chip {{
-    font-size:12px; padding:.25rem .6rem; border-radius:999px; border:1px solid #3f4147;
-    background:#2b2d31; color:#ddd;
+    font-size: 12px;
+    padding: .25rem .6rem;
+    border-radius: 999px;
+    border: 1px solid #3f4147;
+    background: #2b2d31;
+    color: #ddd;
   }}
-  .slider-wrap {{ display:flex; align-items:center; gap:.5rem; }}
+
+  .slider-wrap {{
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }}
+
+  @keyframes fadeIn {{ to {{ opacity: 1; }} }}
 </style>
 
 <div class="video-wrapper">
@@ -393,7 +433,8 @@ agent_html = f"""
   const mutedEl   = document.getElementById("muted");
   const unmuteEl  = document.getElementById("unmute-btn");
 
-  const speakText = {{escaped_text if 'escaped_text' in globals() else '" "'}};
+  // speakText is injected from Streamlit (safe JSON string)
+  const speakText = {escaped_text if 'escaped_text' in globals() else '" "'};
 
   let srcObjectRef = null;
   let agentManager = null;
@@ -419,7 +460,9 @@ agent_html = f"""
           videoEl.srcObject = value;
           videoEl.volume = parseFloat(volEl.value || "0.8");
           videoEl.muted = true;      // start muted to satisfy autoplay
-          videoEl.play().catch(()=>{{}});
+          videoEl.play().catch(()=>{{
+            /* ignore */
+          }});
           updateAudioUI();
           return value;
         }},
@@ -446,7 +489,7 @@ agent_html = f"""
       if (srcObjectRef) {{
         videoEl.src = "";
         videoEl.srcObject = srcObjectRef;
-        videoEl.play().catch(()=>{{}});
+        videoEl.play().catch(()=>{{ /* ignore */ }});
       }}
       await agentManager.speak({{ type: "text", input: text.slice(0, 900) }});
     }} catch (e) {{
@@ -459,19 +502,24 @@ agent_html = f"""
       videoEl.muted = false;
       await videoEl.play();
     }} catch (e) {{
-      videoEl.muted = true; // still blocked
+      // If blocked by autoplay policy, remain muted until user clicks again
+      videoEl.muted = true;
     }}
     updateAudioUI();
   }}
 
+  // UI hooks
   unmuteEl.onclick = tryUnmute;
   videoEl.addEventListener("click", tryUnmute, {{ once: false }});
-  volEl.oninput = () => {{ videoEl.volume = parseFloat(volEl.value || "0.8"); }};
+  volEl.oninput = () => {{
+    videoEl.volume = parseFloat(volEl.value || "0.8");
+  }};
 
+  // Boot
   (async () => {{
     try {{
       await ensureConnected();
-      await tryUnmute();
+      await tryUnmute();   // best-effort; may still require a click
     }} catch (e) {{
       console.error("init error:", e);
       setStatus("failed to connect");
@@ -479,15 +527,12 @@ agent_html = f"""
   }})();
 </script>
 """
-
 html_key = f"did_agent_{hash(st.session_state.get('speak_text', '')) % 1_000_000}"
 
 components.html(
     agent_html,
     height=VIDEO_HEIGHT + 100,
-    width=CONTENT_WIDTH,
-    scrolling=False,
-    key=html_key   # <— important so new speakText is picked up
+    scrolling=False
 )
 
 # ------------------------------------------------------------------------------
