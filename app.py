@@ -41,6 +41,7 @@ for key, default in {
     "latest_question": "",
     "speak_text": "",  # <- what the Agent will say on each render
     "chat_history": [],  # <- stores prior questions and answers for follow-up
+    "awaiting_demographics": False,  # whether last turn asked a clarifying demo question
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -334,6 +335,8 @@ Response:
 """
         response = llm.invoke(prompt).content.strip()
         cleaned, tag = _postprocess(response)
+        # Maintain a simple flag so the next user message is treated as demographics
+        st.session_state["awaiting_demographics"] = (tag == "CLARIFY")
         if tag == "CLARIFY":
             return cleaned
         return f"{cleaned} {closing_variation()}"
@@ -392,130 +395,11 @@ Response:
 """
     response = llm.invoke(prompt).content.strip()
     cleaned, tag = _postprocess(response)
+    # Maintain a simple flag so the next user message is treated as demographics
+    st.session_state["awaiting_demographics"] = (tag == "CLARIFY")
     if tag == "CLARIFY":
         return cleaned
     return f"{cleaned} {closing_variation()}"
-
-def format_response(base_answer: str, query: str, use_clinical: bool = False) -> str:
-    """
-    Returns either:
-      - A single clarifying question (when demographics are missing), or
-      - Tailored advice text that includes example phrases.
-    Uses tags [CLARIFY] / [ADVICE] to decide whether to append the closing variation.
-    """
-    fallback_trigger = "THIS IS QUESTION IS OUTSIDE OF MY TRAINING"
-
-    def _postprocess(text: str):
-        """Strip mode tag and return (clean_text, tag)."""
-        t = (text or "").strip()
-        tag = None
-        if t.startswith("[CLARIFY]"):
-            tag = "CLARIFY"
-            t = t[len("[CLARIFY]"):].strip()
-        elif t.startswith("[ADVICE]"):
-            tag = "ADVICE"
-            t = t[len("[ADVICE]"):].strip()
-        return t, tag
-
-    # -------------------------
-    # Fallback: no coverage in RAG
-    # -------------------------
-    if fallback_trigger in base_answer:
-        if STRICT_INDEX_ONLY:
-            # No open-ended fallback—stay within the index
-            return ("I don't have enough information in my knowledge base to answer that. "
-                    "Try rephrasing or ask about a topic that's in the corpus.")
-
-        # (Demographics-aware open-ended fallback)
-        prompt = f"""
-You are an expert workplace communication coach trained in psychology and management.
-The user is a busy middle manager asking about employee behavior and motivation.
-
-GOAL: Deliver a concise, actionable response. If the question is missing key
-demographics (approximate age range / generation and gender, both OPTIONAL),
-ask exactly ONE short clarifying question to tailor guidance, then STOP.
-Do not provide advice until you get the answer to that question.
-
-Demographics policy:
-- Ask once, briefly, and make it clearly optional. Example:
-  "Quick check: what's their approx. age range (e.g., 20s/Gen Z) and, if relevant, their gender?
-   If you'd rather not say, I can proceed generally."
-- When provided, use demographics to shape tone, channels, and motivators.
-- Never stereotype; tie guidance to observable behaviors.
-
-TONE: respectful, empathetic, professional.
-LENGTH LIMITS:
-- Clarifying question: Max 120 words (one sentence).
-- Advice (when demographics are present): Max 200 words.
-
-OUTPUT MODE (IMPORTANT):
-- If demographics are MISSING in QUESTION: start with [CLARIFY] and output ONLY the clarifying question (one sentence).
-- If demographics are PRESENT in QUESTION: start with [ADVICE] and output tailored advice that includes:
-  - "Here are some example phrases." with 3 items, each followed by a one-sentence "why this works."
-
-QUESTION:
-{query}
-
-Response:
-"""
-        response = llm.invoke(prompt).content.strip()
-        cleaned, tag = _postprocess(response)
-        if tag == "CLARIFY":
-            return cleaned
-        return f"{cleaned} {closing_variation()}"
-
-    # Main coaching response (RAG context present)
-    clinical_note = """
-Use accurate psychological terms (e.g., 'disorganized attachment') and refer to hormonal
-factors when relevant (e.g., cortisol, oxytocin, etc.).
-""" if use_clinical else """
-Use practical, accessible language with no labels or jargon. Speak like a seasoned team leader.
-"""
-
-    prompt = f"""
-You are a management communication coach. Your job is to guide a middle manager in handling
-the issue below. You will speak using ONLY the knowledge provided in ANSWER.
-
-AUDIENCE: busy middle manager with no psychology background.
-VOICE: calm, confident, supportive.
-STYLE: short sentences, no jargon unless asked for it.
-
-{clinical_note}
-
-Demographics policy:
-- Check QUESTION for approximate age range/generation and gender (OPTIONAL).
-- If both are missing, ask exactly ONE short clarifying question, then STOP. Do not provide advice yet.
-  Suggested pattern: "Quick check: what's their approx. age range (e.g., 20s/Gen Z) and, if relevant, their gender?
-  If you'd rather not say, I can proceed generally."
-- If demographics are present (or the manager declines), proceed with tailored advice.
-- Use demographics only to adjust tone, channels, and likely motivators; avoid stereotypes. Base the "why" on behaviors.
-
-FORMAT (when giving advice):
-- Start with a brief explanation of what might be happening.
-- Say: "Here are some example phrases." Then list 3 things the manager could say.
-  After each, add "why this works" that refers to behavior patterns (and demographic cues if provided).
-
-LENGTH LIMITS:
-- Clarifying question: Max 120 words (one sentence).
-- Advice: Max 200 words.
-
-OUTPUT MODE (IMPORTANT):
-- If demographics are MISSING in QUESTION: start with [CLARIFY] and output ONLY the clarifying question (one sentence).
-- If demographics are PRESENT or user declines: start with [ADVICE] and output the advice in the specified format.
-
-QUESTION: {query}
-
-ANSWER (retrieved knowledge base):
-{base_answer}
-
-Response:
-"""
-    response = llm.invoke(prompt).content.strip()
-    cleaned, tag = _postprocess(response)
-    if tag == "CLARIFY":
-        return cleaned
-    return f"{cleaned} {closing_variation()}"
-
 
 # follow-up logic function
 
@@ -809,7 +693,8 @@ html_key = f"did_agent_{hash(st.session_state.get('speak_text', '')) % 1_000_000
 components.html(
     agent_html,
     height=VIDEO_HEIGHT + CONTROL_ROW_PX + COMPONENT_VPAD_PX,
-    scrolling=False
+    scrolling=False,
+    key=html_key 
 )
 
 # ------------------------------------------------------------------------------
@@ -825,6 +710,11 @@ with st.form("query_form", clear_on_submit=True):
 if submitted:
     cleaned_query = query.strip()
     if cleaned_query:
+        update_demographics_from_text(cleaned_query)
+        # If last turn asked for demographics, consider this turn the answer and clear the flag
+        if st.session_state.get("awaiting_demographics"):
+            st.session_state["awaiting_demographics"] = False
+
         with st.spinner("Retrieving and formatting response..."):
             try:
                 result = qa_chain({"query": cleaned_query})
@@ -832,7 +722,8 @@ if submitted:
             except Exception:
                 st.error("Sorry, I hit an error fetching an answer. Playing a brief explanation instead.")
                 base = ""
-            
+                result = {}
+
             # Guardrail: if retrieved docs aren’t actually relevant, force "insufficient"
             src_docs = result.get("source_documents") or []
             if not context_is_relevant(src_docs, cleaned_query):
@@ -844,6 +735,9 @@ if submitted:
             else:
                 use_clinical = clinical_mode_toggle or detect_clinical_terms(cleaned_query)
                 formatted = format_response(base, cleaned_query, use_clinical)
+
+                # Learn any demographics the assistant echoed (e.g., "For your Gen Z analyst...")
+                update_demographics_from_text(formatted)
 
                 # --- TTS LENGTH-BUFFERED LOGIC ---
                 MAX_TTS_LEN = 800
@@ -874,8 +768,6 @@ if submitted:
         st.rerun()
     else:
         st.warning("Please enter a valid question.")
-
-update_demographics_from_text(cleaned_query)
 
 # ------------------------------------------------------------------------------  
 # Follow-up Suggestions 
