@@ -693,8 +693,7 @@ html_key = f"did_agent_{hash(st.session_state.get('speak_text', '')) % 1_000_000
 components.html(
     agent_html,
     height=VIDEO_HEIGHT + CONTROL_ROW_PX + COMPONENT_VPAD_PX,
-    scrolling=False,
-    key=html_key 
+    scrolling=False
 )
 
 # ------------------------------------------------------------------------------
