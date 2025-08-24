@@ -28,7 +28,7 @@ VIDEO_AR = 16 / 9
 VIDEO_HEIGHT = int(CONTENT_WIDTH / VIDEO_AR)  # ~405 or ~432
 CONTROL_ROW_PX = 64
 COMPONENT_VPAD_PX = 16
-STRICT_INDEX_ONLY = True  # If True, never use model knowledge beyond FAISS context
+STRICT_INDEX_ONLY = False  # Allow blended fallback with guardrails
 
 # ------------------------------------------------------------------------------
 # Session state init (BEFORE any access)
@@ -226,6 +226,26 @@ except Exception as e:
     st.error(f"Error loading FAISS index or QA chain: {e}")
     st.stop()
 
+def get_guardrail_context(query: str, k: int = 4) -> str:
+    """
+    Retrieve a small set of potentially relevant snippets to act as 'guardrails'
+    when we need to fallback to model knowledge. The LLM will be told to avoid
+    contradicting these. Keep this short to save tokens.
+    """
+    try:
+        docs = retriever.get_relevant_documents(query)[:k]
+    except Exception:
+        docs = []
+    if not docs:
+        return ""
+    # Trim each snippet to keep prompt small
+    chunks = []
+    for d in docs:
+        text = getattr(d, "page_content", "")[:600]
+        if text:
+            chunks.append(text.strip())
+    return "\n\n---\n\n".join(chunks[:k])
+
 # ------------------------------------------------------------------------------
 # Define the sanitizer (near your other helpers)
 # ------------------------------------------------------------------------------
@@ -294,11 +314,13 @@ def format_response(base_answer: str, query: str, use_clinical: bool = False) ->
     # Fallback: no coverage in RAG
     # -------------------------
     if fallback_trigger in base_answer:
-        if STRICT_INDEX_ONLY:
-            return ("I don't have enough information in my knowledge base to answer that. "
-                    "Try rephrasing or ask about a topic that's in the corpus.")
+      if STRICT_INDEX_ONLY:
+          return ("I don't have enough information in my knowledge base to answer that. "
+                  "Try rephrasing or ask about a topic that's in the corpus.")
 
-        prompt = f"""
+    guardrails = get_guardrail_context(query, k=4)
+
+    prompt = f"""
 You are an expert workplace communication coach trained in psychology and management.
 The user is a busy middle manager asking about employee behavior and motivation.
 
@@ -306,17 +328,17 @@ KNOWN DEMOGRAPHICS (optional): {demo_str}
 RECENT TURNS (for continuity; do not restate verbatim):
 {recent_dialogue or '[none]'}
 
+GUARDRAILS (must NOT be contradicted; if unclear, stay general or say you can't tell):
+{guardrails or '[none]'}
+
 GOAL: Deliver a concise, actionable response. If the question is missing key
 demographics (approximate age range / generation and gender, both OPTIONAL),
 ask exactly ONE short clarifying question to tailor guidance, then STOP.
 Do not provide advice until you get the answer to that question.
 
-Demographics policy:
-- Ask once, briefly, and make it clearly optional. Example:
-  "Quick check: what's their approx. age range (e.g., 20s/Gen Z) and, if relevant, their gender?
-   If you'd rather not say, I can proceed generally."
-- When provided, use demographics to shape tone, channels, and motivators.
-- Never stereotype; tie guidance to observable behaviors.
+When giving advice, you may use common best‑practice coaching guidance,
+but do not introduce concrete facts that contradict the Guardrails. If
+there’s a conflict, prefer the Guardrails or say you can’t be sure.
 
 TONE: respectful, empathetic, professional.
 LENGTH LIMITS:
@@ -325,7 +347,7 @@ LENGTH LIMITS:
 
 OUTPUT MODE (IMPORTANT):
 - If demographics are MISSING in QUESTION: start with [CLARIFY] and output ONLY the clarifying question (one sentence).
-- If demographics are PRESENT in QUESTION: start with [ADVICE] and output tailored advice that includes:
+- If demographics are PRESENT in QUESTION (or the manager declines): start with [ADVICE] and output tailored advice that includes:
   - "Here are some example phrases." with 3 items, each followed by a one-sentence "why this works."
 
 QUESTION:
@@ -333,13 +355,13 @@ QUESTION:
 
 Response:
 """
-        response = llm.invoke(prompt).content.strip()
-        cleaned, tag = _postprocess(response)
-        # Maintain a simple flag so the next user message is treated as demographics
-        st.session_state["awaiting_demographics"] = (tag == "CLARIFY")
-        if tag == "CLARIFY":
-            return cleaned
-        return f"{cleaned} {closing_variation()}"
+    response = llm.invoke(prompt).content.strip()
+    cleaned, tag = _postprocess(response)
+    # Maintain a simple flag so the next user message is treated as demographics
+    st.session_state["awaiting_demographics"] = (tag == "CLARIFY")
+    if tag == "CLARIFY":
+        return cleaned
+    return f"{cleaned} {closing_variation()}"
 
     # -------------------------
     # Main coaching response (RAG context present)
