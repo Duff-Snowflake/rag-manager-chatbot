@@ -268,19 +268,25 @@ def format_response(base_answer: str, query: str, use_clinical: bool = False) ->
       - A single clarifying question (when demographics are missing), or
       - Tailored advice text that includes example phrases.
     Uses tags [CLARIFY] / [ADVICE] to decide whether to append the closing variation.
+    Also injects known demographics and recent dialogue from session memory.
     """
     fallback_trigger = "THIS IS QUESTION IS OUTSIDE OF MY TRAINING"
 
+    # ---- pull conversation memory (no changes to callers needed) ----
+    _ensure_demo_state()
+    demo = st.session_state.get("demographics", {})
+    demo_str = ", ".join(
+        s for s in [demo.get("age_or_gen"), demo.get("gender")] if s
+    ) or "not provided"
+    recent_dialogue = get_recent_dialogue(max_turns=6)
+
     def _postprocess(text: str):
-        """Strip mode tag and return (clean_text, tag)."""
         t = (text or "").strip()
         tag = None
         if t.startswith("[CLARIFY]"):
-            tag = "CLARIFY"
-            t = t[len("[CLARIFY]"):].strip()
+            tag = "CLARIFY"; t = t[len("[CLARIFY]"):].strip()
         elif t.startswith("[ADVICE]"):
-            tag = "ADVICE"
-            t = t[len("[ADVICE]"):].strip()
+            tag = "ADVICE";  t = t[len("[ADVICE]"):].strip()
         return t, tag
 
     # -------------------------
@@ -288,14 +294,16 @@ def format_response(base_answer: str, query: str, use_clinical: bool = False) ->
     # -------------------------
     if fallback_trigger in base_answer:
         if STRICT_INDEX_ONLY:
-            # No open-ended fallback—stay within the index
             return ("I don't have enough information in my knowledge base to answer that. "
                     "Try rephrasing or ask about a topic that's in the corpus.")
 
-        # (Demographics-aware open-ended fallback)
         prompt = f"""
 You are an expert workplace communication coach trained in psychology and management.
 The user is a busy middle manager asking about employee behavior and motivation.
+
+KNOWN DEMOGRAPHICS (optional): {demo_str}
+RECENT TURNS (for continuity; do not restate verbatim):
+{recent_dialogue or '[none]'}
 
 GOAL: Deliver a concise, actionable response. If the question is missing key
 demographics (approximate age range / generation and gender, both OPTIONAL),
@@ -344,6 +352,10 @@ Use practical, accessible language with no labels or jargon. Speak like a season
 You are a management communication coach. Your job is to guide a middle manager in handling
 the issue below. You will speak using ONLY the knowledge provided in ANSWER.
 
+KNOWN DEMOGRAPHICS (optional): {demo_str}
+RECENT TURNS (for continuity; do not restate verbatim):
+{recent_dialogue or '[none]'}
+
 AUDIENCE: busy middle manager with no psychology background.
 VOICE: calm, confident, supportive.
 STYLE: short sentences, no jargon unless asked for it.
@@ -383,6 +395,7 @@ Response:
     if tag == "CLARIFY":
         return cleaned
     return f"{cleaned} {closing_variation()}"
+
 def format_response(base_answer: str, query: str, use_clinical: bool = False) -> str:
     """
     Returns either:
@@ -545,6 +558,58 @@ Answer:
     except Exception:
         return False
     return verdict.startswith("RELEVANT")
+
+# ------------------------------
+# Conversation memory helpers
+# ------------------------------
+_DEMO_GEN_WORDS = r"(gen\s*[zalpha]|gen\s*z|zoomers?|millennials?|gen\s*y|gen\s*x|boomers?)"
+_DEMO_AGE_RANGE = r"(\b(?:late|early|mid)\s*\d0s\b|\b\d{2}s\b|\bunder\s*25\b|\bover\s*50\b|\b[12]\d(?:\s*-\s*[12]\d)?\b)"
+_DEMO_GENDER    = r"\b(female|woman|women|male|man|men|nonbinary|non-binary|nb|they/them|she/her|he/him|she|her|he|him)\b"
+
+def _ensure_demo_state():
+    if "demographics" not in st.session_state:
+        st.session_state["demographics"] = {"age_or_gen": None, "gender": None}
+
+def parse_demographics(text: str) -> dict:
+    """Pull coarse age/generation and gender cues from free text."""
+    import re
+    t = (text or "").lower()
+    age_or_gen = None
+    gender = None
+
+    m1 = re.search(_DEMO_GEN_WORDS, t, flags=re.I)
+    m2 = re.search(_DEMO_AGE_RANGE, t, flags=re.I)
+    if m1 or m2:
+        age_or_gen = (m1.group(0) if m1 else m2.group(0)).strip()
+
+    m3 = re.search(_DEMO_GENDER, t, flags=re.I)
+    if m3:
+        gender = m3.group(0).strip()
+
+    return {"age_or_gen": age_or_gen, "gender": gender}
+
+def update_demographics_from_text(text: str):
+    """Update session memory with any demographics we can detect in this turn."""
+    _ensure_demo_state()
+    found = parse_demographics(text)
+    if found.get("age_or_gen"):
+        st.session_state["demographics"]["age_or_gen"] = found["age_or_gen"]
+    if found.get("gender"):
+        st.session_state["demographics"]["gender"] = found["gender"]
+
+def get_recent_dialogue(max_turns: int = 6) -> str:
+    """Return recent Q/A pairs as a compact transcript for prompt grounding."""
+    hist = st.session_state.get("chat_history", [])
+    if not hist:
+        return ""
+    # last N-1 pairs, exclude current unfinished turn
+    pairs = hist[-max_turns:]
+    lines = []
+    for q, a in pairs:
+        lines.append(f"User: {q}")
+        # Keep it short to save tokens for TTS
+        lines.append(f"Coach: {a[:300]}")
+    return "\n".join(lines)
 
 # ------------------------------------------------------------------------------
 # D-ID Agents SDK embed (single video at top)
@@ -809,6 +874,8 @@ if submitted:
         st.rerun()
     else:
         st.warning("Please enter a valid question.")
+
+update_demographics_from_text(cleaned_query)
 
 # ------------------------------------------------------------------------------  
 # Follow-up Suggestions 
