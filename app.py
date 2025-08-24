@@ -1,4 +1,6 @@
+# ------------------------------------------------------------------------------
 # app.py
+# ------------------------------------------------------------------------------
 import os
 import json
 from datetime import datetime, timedelta
@@ -21,11 +23,12 @@ from rag_pipeline import load_faiss_index
 # ------------------------------------------------------------------------------
 st.set_page_config(page_title="Employee Management Assistant", layout="centered")
 # Shared content width for desktop/tablet
-CONTENT_WIDTH = 768      # matches form container width
+CONTENT_WIDTH = 768
 VIDEO_AR = 16 / 9
-VIDEO_HEIGHT = int(CONTENT_WIDTH / VIDEO_AR)  # ~405
-CONTROL_ROW_PX = 64          # height of the status/volume row
-COMPONENT_VPAD_PX = 16       # a little breathing room below the controls
+VIDEO_HEIGHT = int(CONTENT_WIDTH / VIDEO_AR)  # ~405 or ~432
+CONTROL_ROW_PX = 64
+COMPONENT_VPAD_PX = 16
+STRICT_INDEX_ONLY = True  # If True, never use model knowledge beyond FAISS context
 
 # ------------------------------------------------------------------------------
 # Session state init (BEFORE any access)
@@ -260,24 +263,61 @@ def closing_variation() -> str:
 # Enhanced response formatting: coaching + fallback LLM synthesis
 # ----------------------------------------------------------------------
 def format_response(base_answer: str, query: str, use_clinical: bool = False) -> str:
+    """
+    Returns either:
+      - A single clarifying question (when demographics are missing), or
+      - Tailored advice text that includes example phrases.
+    Uses tags [CLARIFY] / [ADVICE] to decide whether to append the closing variation.
+    """
     fallback_trigger = "THIS IS QUESTION IS OUTSIDE OF MY TRAINING"
+
+    def _postprocess(text: str):
+        """Strip mode tag and return (clean_text, tag)."""
+        t = (text or "").strip()
+        tag = None
+        if t.startswith("[CLARIFY]"):
+            tag = "CLARIFY"
+            t = t[len("[CLARIFY]"):].strip()
+        elif t.startswith("[ADVICE]"):
+            tag = "ADVICE"
+            t = t[len("[ADVICE]"):].strip()
+        return t, tag
+
+    # -------------------------
+    # Fallback: no coverage in RAG
+    # -------------------------
     if fallback_trigger in base_answer:
-        # Fallback prompt when FAISS retrieval lacks coverage
+        if STRICT_INDEX_ONLY:
+            # No open-ended fallback—stay within the index
+            return ("I don't have enough information in my knowledge base to answer that. "
+                    "Try rephrasing or ask about a topic that's in the corpus.")
+
+        # (Demographics-aware open-ended fallback)
         prompt = f"""
 You are an expert workplace communication coach trained in psychology and management.
 The user is a busy middle manager asking about employee behavior and motivation.
 
-Your job is to infer the likely behavior pattern and offer practical guidance to help
-the manager motivate or support their employee more effectively. If you suspect an
-insecure attachment style (e.g., anxious, avoidant, disorganized), you may briefly
-mention that this is *common* and offer practical next steps.
+GOAL: Deliver a concise, actionable response. If the question is missing key
+demographics (approximate age range / generation and gender, both OPTIONAL),
+ask exactly ONE short clarifying question to tailor guidance, then STOP.
+Do not provide advice until you get the answer to that question.
+
+Demographics policy:
+- Ask once, briefly, and make it clearly optional. Example:
+  "Quick check: what's their approx. age range (e.g., 20s/Gen Z) and, if relevant, their gender?
+   If you'd rather not say, I can proceed generally."
+- When provided, use demographics to shape tone, channels, and motivators.
+- Never stereotype; tie guidance to observable behaviors.
 
 TONE: respectful, empathetic, professional.
-LENGTH: Max 200 words.
-FORMAT:
-- Start with a brief explanation of what might be happening.
-- Say: "Here are some example phrases." Then list 3 things the manager could say, each followed by a sentence on why it works.
-- Use plain speech unless clinical language is requested.
+LENGTH LIMITS:
+- Clarifying question: Max 120 words (one sentence).
+- Advice (when demographics are present): Max 200 words.
+
+OUTPUT MODE (IMPORTANT):
+- If demographics are MISSING in QUESTION: start with [CLARIFY] and output ONLY the clarifying question (one sentence).
+- If demographics are PRESENT in QUESTION: start with [ADVICE] and output tailored advice that includes:
+  - "Here are some example phrases." with 3 items, each followed by a one-sentence "why this works."
 
 QUESTION:
 {query}
@@ -285,9 +325,14 @@ QUESTION:
 Response:
 """
         response = llm.invoke(prompt).content.strip()
-        return f"{response} {closing_variation()}"
+        cleaned, tag = _postprocess(response)
+        if tag == "CLARIFY":
+            return cleaned
+        return f"{cleaned} {closing_variation()}"
 
-    # Main coaching response prompt (FAISS context present)
+    # -------------------------
+    # Main coaching response (RAG context present)
+    # -------------------------
     clinical_note = """
 Use accurate psychological terms (e.g., 'disorganized attachment') and refer to hormonal
 factors when relevant (e.g., cortisol, oxytocin, etc.).
@@ -305,10 +350,26 @@ STYLE: short sentences, no jargon unless asked for it.
 
 {clinical_note}
 
-FORMAT:
-- Start with a short explanation of what might be happening.
+Demographics policy:
+- Check QUESTION for approximate age range/generation and gender (OPTIONAL).
+- If both are missing, ask exactly ONE short clarifying question, then STOP. Do not provide advice yet.
+  Suggested pattern: "Quick check: what's their approx. age range (e.g., 20s/Gen Z) and, if relevant, their gender?
+  If you'd rather not say, I can proceed generally."
+- If demographics are present (or the manager declines), proceed with tailored advice.
+- Use demographics only to adjust tone, channels, and likely motivators; avoid stereotypes. Base the "why" on behaviors.
+
+FORMAT (when giving advice):
+- Start with a brief explanation of what might be happening.
 - Say: "Here are some example phrases." Then list 3 things the manager could say.
-    Each example should be followed by a "why this works" explanation that refers to attachment style behavior.
+  After each, add "why this works" that refers to behavior patterns (and demographic cues if provided).
+
+LENGTH LIMITS:
+- Clarifying question: Max 120 words (one sentence).
+- Advice: Max 200 words.
+
+OUTPUT MODE (IMPORTANT):
+- If demographics are MISSING in QUESTION: start with [CLARIFY] and output ONLY the clarifying question (one sentence).
+- If demographics are PRESENT or user declines: start with [ADVICE] and output the advice in the specified format.
 
 QUESTION: {query}
 
@@ -318,7 +379,130 @@ ANSWER (retrieved knowledge base):
 Response:
 """
     response = llm.invoke(prompt).content.strip()
-    return f"{response} {closing_variation()}"
+    cleaned, tag = _postprocess(response)
+    if tag == "CLARIFY":
+        return cleaned
+    return f"{cleaned} {closing_variation()}"
+def format_response(base_answer: str, query: str, use_clinical: bool = False) -> str:
+    """
+    Returns either:
+      - A single clarifying question (when demographics are missing), or
+      - Tailored advice text that includes example phrases.
+    Uses tags [CLARIFY] / [ADVICE] to decide whether to append the closing variation.
+    """
+    fallback_trigger = "THIS IS QUESTION IS OUTSIDE OF MY TRAINING"
+
+    def _postprocess(text: str):
+        """Strip mode tag and return (clean_text, tag)."""
+        t = (text or "").strip()
+        tag = None
+        if t.startswith("[CLARIFY]"):
+            tag = "CLARIFY"
+            t = t[len("[CLARIFY]"):].strip()
+        elif t.startswith("[ADVICE]"):
+            tag = "ADVICE"
+            t = t[len("[ADVICE]"):].strip()
+        return t, tag
+
+    # -------------------------
+    # Fallback: no coverage in RAG
+    # -------------------------
+    if fallback_trigger in base_answer:
+        if STRICT_INDEX_ONLY:
+            # No open-ended fallback—stay within the index
+            return ("I don't have enough information in my knowledge base to answer that. "
+                    "Try rephrasing or ask about a topic that's in the corpus.")
+
+        # (Demographics-aware open-ended fallback)
+        prompt = f"""
+You are an expert workplace communication coach trained in psychology and management.
+The user is a busy middle manager asking about employee behavior and motivation.
+
+GOAL: Deliver a concise, actionable response. If the question is missing key
+demographics (approximate age range / generation and gender, both OPTIONAL),
+ask exactly ONE short clarifying question to tailor guidance, then STOP.
+Do not provide advice until you get the answer to that question.
+
+Demographics policy:
+- Ask once, briefly, and make it clearly optional. Example:
+  "Quick check: what's their approx. age range (e.g., 20s/Gen Z) and, if relevant, their gender?
+   If you'd rather not say, I can proceed generally."
+- When provided, use demographics to shape tone, channels, and motivators.
+- Never stereotype; tie guidance to observable behaviors.
+
+TONE: respectful, empathetic, professional.
+LENGTH LIMITS:
+- Clarifying question: Max 120 words (one sentence).
+- Advice (when demographics are present): Max 200 words.
+
+OUTPUT MODE (IMPORTANT):
+- If demographics are MISSING in QUESTION: start with [CLARIFY] and output ONLY the clarifying question (one sentence).
+- If demographics are PRESENT in QUESTION: start with [ADVICE] and output tailored advice that includes:
+  - "Here are some example phrases." with 3 items, each followed by a one-sentence "why this works."
+
+QUESTION:
+{query}
+
+Response:
+"""
+        response = llm.invoke(prompt).content.strip()
+        cleaned, tag = _postprocess(response)
+        if tag == "CLARIFY":
+            return cleaned
+        return f"{cleaned} {closing_variation()}"
+
+    # Main coaching response (RAG context present)
+    clinical_note = """
+Use accurate psychological terms (e.g., 'disorganized attachment') and refer to hormonal
+factors when relevant (e.g., cortisol, oxytocin, etc.).
+""" if use_clinical else """
+Use practical, accessible language with no labels or jargon. Speak like a seasoned team leader.
+"""
+
+    prompt = f"""
+You are a management communication coach. Your job is to guide a middle manager in handling
+the issue below. You will speak using ONLY the knowledge provided in ANSWER.
+
+AUDIENCE: busy middle manager with no psychology background.
+VOICE: calm, confident, supportive.
+STYLE: short sentences, no jargon unless asked for it.
+
+{clinical_note}
+
+Demographics policy:
+- Check QUESTION for approximate age range/generation and gender (OPTIONAL).
+- If both are missing, ask exactly ONE short clarifying question, then STOP. Do not provide advice yet.
+  Suggested pattern: "Quick check: what's their approx. age range (e.g., 20s/Gen Z) and, if relevant, their gender?
+  If you'd rather not say, I can proceed generally."
+- If demographics are present (or the manager declines), proceed with tailored advice.
+- Use demographics only to adjust tone, channels, and likely motivators; avoid stereotypes. Base the "why" on behaviors.
+
+FORMAT (when giving advice):
+- Start with a brief explanation of what might be happening.
+- Say: "Here are some example phrases." Then list 3 things the manager could say.
+  After each, add "why this works" that refers to behavior patterns (and demographic cues if provided).
+
+LENGTH LIMITS:
+- Clarifying question: Max 120 words (one sentence).
+- Advice: Max 200 words.
+
+OUTPUT MODE (IMPORTANT):
+- If demographics are MISSING in QUESTION: start with [CLARIFY] and output ONLY the clarifying question (one sentence).
+- If demographics are PRESENT or user declines: start with [ADVICE] and output the advice in the specified format.
+
+QUESTION: {query}
+
+ANSWER (retrieved knowledge base):
+{base_answer}
+
+Response:
+"""
+    response = llm.invoke(prompt).content.strip()
+    cleaned, tag = _postprocess(response)
+    if tag == "CLARIFY":
+        return cleaned
+    return f"{cleaned} {closing_variation()}"
+
 
 # follow-up logic function
 
@@ -338,6 +522,29 @@ Follow-up questions:
     followup_response = llm.invoke(prompt).content.strip()
     return [line.lstrip("- ").strip() for line in followup_response.splitlines() if line.startswith("- ")]
 
+def context_is_relevant(source_docs, question) -> bool:
+    """Return True if retrieved docs clearly help answer the question."""
+    if not source_docs:
+        return False
+    # Keep short to avoid extra tokens; judge top ~3 docs
+    joined = "\n\n".join(getattr(d, "page_content", "")[:500] for d in source_docs[:3])
+    judge_prompt = f"""
+You are a strict judge. Decide if the CONTEXT contains information that directly helps
+answer the QUESTION. Output only one word: RELEVANT or IRRELEVANT.
+
+QUESTION:
+{question}
+
+CONTEXT:
+{joined}
+
+Answer:
+"""
+    try:
+        verdict = (llm.invoke(judge_prompt).content or "").strip().upper()
+    except Exception:
+        return False
+    return verdict.startswith("RELEVANT")
 
 # ------------------------------------------------------------------------------
 # D-ID Agents SDK embed (single video at top)
@@ -560,6 +767,11 @@ if submitted:
             except Exception:
                 st.error("Sorry, I hit an error fetching an answer. Playing a brief explanation instead.")
                 base = ""
+            
+            # Guardrail: if retrieved docs aren’t actually relevant, force "insufficient"
+            src_docs = result.get("source_documents") or []
+            if not context_is_relevant(src_docs, cleaned_query):
+                base = "THIS IS QUESTION IS OUTSIDE OF MY TRAINING"
 
             # If we didn't get anything from RAG, speak a short default line so the avatar plays
             if not base:
