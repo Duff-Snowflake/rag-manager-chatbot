@@ -9,8 +9,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
-import re   
-import random  
+import re
+import random
 
 from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
@@ -267,7 +267,6 @@ def detect_clinical_terms(text: str) -> bool:
 # ------------------------------------------------------------------------------
 # Add closing variations helper function
 # ------------------------------------------------------------------------------
-
 def closing_variation() -> str:
     options = [
         "Try these and let me know how it works out. We can dial this in over time.",
@@ -280,9 +279,9 @@ def closing_variation() -> str:
     ]
     return random.choice(options)
 
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Enhanced response formatting: coaching + fallback LLM synthesis
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def format_response(base_answer: str, query: str, use_clinical: bool = False) -> str:
     """
     Returns either:
@@ -318,9 +317,9 @@ def format_response(base_answer: str, query: str, use_clinical: bool = False) ->
           return ("I don't have enough information in my knowledge base to answer that. "
                   "Try rephrasing or ask about a topic that's in the corpus.")
 
-    guardrails = get_guardrail_context(query, k=4)
+      guardrails = get_guardrail_context(query, k=4)
 
-    prompt = f"""
+      prompt = f"""
 You are an expert workplace communication coach trained in psychology and management.
 The user is a busy middle manager asking about employee behavior and motivation.
 
@@ -355,13 +354,13 @@ QUESTION:
 
 Response:
 """
-    response = llm.invoke(prompt).content.strip()
-    cleaned, tag = _postprocess(response)
-    # Maintain a simple flag so the next user message is treated as demographics
-    st.session_state["awaiting_demographics"] = (tag == "CLARIFY")
-    if tag == "CLARIFY":
-        return cleaned
-    return f"{cleaned} {closing_variation()}"
+      response = llm.invoke(prompt).content.strip()
+      cleaned, tag = _postprocess(response)
+      # Maintain a simple flag so the next user message is treated as demographics
+      st.session_state["awaiting_demographics"] = (tag == "CLARIFY")
+      if tag == "CLARIFY":
+          return cleaned
+      return f"{cleaned} {closing_variation()}"
 
     # -------------------------
     # Main coaching response (RAG context present)
@@ -424,7 +423,6 @@ Response:
     return f"{cleaned} {closing_variation()}"
 
 # follow-up logic function
-
 def generate_followups(history: list, current_q: str, current_a: str) -> list:
     """Return 2–3 follow-up coaching questions based on history and current Q/A."""
     prompt = f"""
@@ -436,7 +434,7 @@ User's question: {current_q}
 Assistant's answer: {current_a}
 
 Follow-up questions:
-- 
+-
 """
     followup_response = llm.invoke(prompt).content.strip()
     return [line.lstrip("- ").strip() for line in followup_response.splitlines() if line.startswith("- ")]
@@ -508,12 +506,10 @@ def get_recent_dialogue(max_turns: int = 6) -> str:
     hist = st.session_state.get("chat_history", [])
     if not hist:
         return ""
-    # last N-1 pairs, exclude current unfinished turn
     pairs = hist[-max_turns:]
     lines = []
     for q, a in pairs:
         lines.append(f"User: {q}")
-        # Keep it short to save tokens for TTS
         lines.append(f"Coach: {a[:300]}")
     return "\n".join(lines)
 
@@ -710,8 +706,6 @@ agent_html = f"""
 </script>
 """
 
-html_key = f"did_agent_{hash(st.session_state.get('speak_text', '')) % 1_000_000}"
-
 components.html(
     agent_html,
     height=VIDEO_HEIGHT + CONTROL_ROW_PX + COMPONENT_VPAD_PX,
@@ -790,17 +784,17 @@ if submitted:
     else:
         st.warning("Please enter a valid question.")
 
-# ------------------------------------------------------------------------------  
-# Follow-up Suggestions 
-# ------------------------------------------------------------------------------  
-if "followups" in st.session_state and st.session_state["followups"]:  
-    st.markdown("**Want to go deeper? Try one of these follow-up questions:**")  
-    cols = st.columns(len(st.session_state["followups"]))  
-    for i, followup in enumerate(st.session_state["followups"]):  
-        with cols[i]:  
-            if st.button(followup, key=f"followup_{i}"):  
+# ------------------------------------------------------------------------------
+# Follow-up Suggestions
+# ------------------------------------------------------------------------------
+if "followups" in st.session_state and st.session_state["followups"]:
+    st.markdown("**Want to go deeper? Try one of these follow-up questions:**")
+    cols = st.columns(len(st.session_state["followups"]))
+    for i, followup in enumerate(st.session_state["followups"]):
+        with cols[i]:
+            if st.button(followup, key=f"followup_{i}"):
                 st.session_state["latest_question"] = followup
-                
+
 # ------------------------------------------------------------------------------
 # Sample questions (optional)
 # ------------------------------------------------------------------------------
